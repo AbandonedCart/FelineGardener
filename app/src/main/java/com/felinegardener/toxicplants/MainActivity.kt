@@ -10,7 +10,6 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -68,6 +67,7 @@ import java.util.Locale
 
 private const val ASPCA_CATS_LIST_URL = "https://www.aspca.org/pet-care/animal-poison-control/cats-plant-list"
 private const val ASPCA_PLANT_PATH_SEGMENT = "/toxic-and-non-toxic-plants/"
+private const val ASPCA_LOGO_IMAGE_URL = "http://www.aspca.org/sites/default/files/aspca-logo-square.png"
 private const val GITHUB_REPO_OWNER = "AbandonedCart"
 private const val GITHUB_REPO_NAME = "FelineGardener"
 private const val GITHUB_RELEASES_URL = "https://github.com/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases/latest"
@@ -192,6 +192,7 @@ object AspcaPlantService {
                 document = document,
                 rawValue = document.select("img[src]").firstOrNull()?.attr("src")
             )
+            ?: ASPCA_LOGO_IMAGE_URL
 
         val alternateNames = parseAlternateNamesFromDetailDocument(document)
         return PlantDetails(
@@ -211,6 +212,13 @@ object AspcaPlantService {
             .getOrElse { trimmed }
             .trim()
             .ifBlank { return null }
+
+        val resolvedUri = runCatching { URI(resolved) }.getOrNull() ?: return null
+        val hasSupportedScheme = resolvedUri.scheme.equals("http", ignoreCase = true) ||
+            resolvedUri.scheme.equals("https", ignoreCase = true)
+        if (!hasSupportedScheme || resolvedUri.host.isNullOrBlank()) {
+            return null
+        }
 
         return resolved
     }
@@ -472,9 +480,7 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
     val coroutineScope = rememberCoroutineScope()
     var isUpdateDialogVisible by remember { mutableStateOf(false) }
 
-    Scaffold(
-        topBar = {}
-    ) { innerPadding ->
+    Scaffold { innerPadding ->
         Column(
             modifier = Modifier
                 .padding(innerPadding)
@@ -756,30 +762,12 @@ private fun PlantRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (imageUrl.isNullOrBlank()) {
-                Box(
-                    modifier = Modifier
-                        .size(88.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            shape = RoundedCornerShape(12.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = plant.name.firstOrNull()?.uppercase() ?: "?",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            } else {
-                AsyncImage(
-                    model = imageUrl,
-                    contentDescription = plant.name,
-                    modifier = Modifier.size(88.dp),
-                    contentScale = ContentScale.Crop
-                )
-            }
+            AsyncImage(
+                model = imageUrl ?: ASPCA_LOGO_IMAGE_URL,
+                contentDescription = plant.name,
+                modifier = Modifier.size(88.dp),
+                contentScale = ContentScale.Crop
+            )
 
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(

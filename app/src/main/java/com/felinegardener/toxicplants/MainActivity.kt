@@ -77,7 +77,7 @@ private const val GITHUB_RELEASES_URL = "https://github.com/$GITHUB_REPO_OWNER/$
 private const val GITHUB_LATEST_RELEASE_API_URL = "https://api.github.com/repos/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases/latest"
 private const val UPDATE_CACHE_DIR = "updates"
 private const val MAX_UPDATE_APK_FILENAME_LENGTH = 120
-private const val DEFAULT_URI_PORT = -1
+private const val NO_EXPLICIT_URI_PORT = -1
 private val SUPPORTED_URL_SCHEMES = setOf(HTTP_SCHEME, HTTPS_SCHEME)
 private const val ASPCA_LAZYLOADER_PLACEHOLDER_PATH_SEGMENT = "/sites/all/modules/contrib/lazyloader/image_placeholder.gif"
 private val INVALID_FILENAME_CHARS = Regex("[^A-Za-z0-9._-]")
@@ -294,7 +294,7 @@ object AspcaPlantService {
             HTTPS_SCHEME,
             userInfo,
             host,
-            DEFAULT_URI_PORT,
+            NO_EXPLICIT_URI_PORT,
             path,
             query,
             fragment

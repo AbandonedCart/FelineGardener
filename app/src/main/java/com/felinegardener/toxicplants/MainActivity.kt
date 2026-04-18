@@ -57,8 +57,10 @@ import java.net.URL
 
 private const val ASPCA_CATS_LIST_URL = "https://www.aspca.org/pet-care/animal-poison-control/cats-plant-list"
 private const val ASPCA_PLANT_PATH_SEGMENT = "/toxic-and-non-toxic-plants/"
-private const val GITHUB_RELEASES_URL = "https://github.com/AbandonedCart/FelineGardener/releases/latest"
-private const val GITHUB_LATEST_RELEASE_API_URL = "https://api.github.com/repos/AbandonedCart/FelineGardener/releases/latest"
+private const val GITHUB_REPO_OWNER = "AbandonedCart"
+private const val GITHUB_REPO_NAME = "FelineGardener"
+private const val GITHUB_RELEASES_URL = "https://github.com/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases/latest"
+private const val GITHUB_LATEST_RELEASE_API_URL = "https://api.github.com/repos/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases/latest"
 
 enum class PlantToxicityGroup {
     TOXIC,

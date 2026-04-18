@@ -75,6 +75,7 @@ private const val GITHUB_LATEST_RELEASE_API_URL = "https://api.github.com/repos/
 private const val UPDATE_CACHE_DIR = "updates"
 private const val MAX_UPDATE_APK_FILENAME_LENGTH = 120
 private val SUPPORTED_IMAGE_SCHEMES = setOf("http", "https")
+private const val ASPCA_LAZYLOADER_PLACEHOLDER_PATH_SEGMENT = "/sites/all/modules/contrib/lazyloader/image_placeholder.gif"
 private val INVALID_FILENAME_CHARS = Regex("[^A-Za-z0-9._-]")
 private val CONSECUTIVE_UNDERSCORES = Regex("_+")
 
@@ -101,6 +102,12 @@ data class GitHubRelease(
     val htmlUrl: String,
     val apkDownloadUrl: String?
 )
+
+private enum class UpdateInstallResult {
+    STARTED,
+    MISSING_INSTALL_PERMISSION,
+    FAILED
+}
 
 data class ToxicPlantsUiState(
     val query: String = "",
@@ -183,6 +190,18 @@ object AspcaPlantService {
     private fun parsePlantDetails(document: Document): PlantDetails {
         val imageUrl = resolveImageUrl(
             document = document,
+            rawValue = document.selectFirst(".field-name-field-image img[data-echo]")?.attr("data-echo")
+        )
+            ?: resolveImageUrl(
+                document = document,
+                rawValue = document.selectFirst(".field-name-field-image noscript img[src]")?.attr("src")
+            )
+            ?: resolveImageUrl(
+                document = document,
+                rawValue = document.selectFirst(".field-name-field-image img[src]")?.attr("src")
+            )
+            ?: resolveImageUrl(
+            document = document,
             rawValue = document.selectFirst("meta[property=og:image]")?.attr("content")
         )
             ?: resolveImageUrl(
@@ -217,6 +236,9 @@ object AspcaPlantService {
         val resolvedUri = runCatching { URI(resolved) }.getOrNull() ?: return null
         val hasSupportedScheme = resolvedUri.scheme?.lowercase(Locale.US) in SUPPORTED_IMAGE_SCHEMES
         if (!hasSupportedScheme || resolvedUri.host.isNullOrBlank()) {
+            return null
+        }
+        if (resolvedUri.path?.contains(ASPCA_LAZYLOADER_PLACEHOLDER_PATH_SEGMENT, ignoreCase = true) == true) {
             return null
         }
 
@@ -536,11 +558,11 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
                                 onClick = {
                                     isUpdateDialogVisible = false
                                     coroutineScope.launch {
-                                        val didStartInstall = downloadAndInstallReleaseApk(
+                                        val installResult = downloadAndInstallReleaseApk(
                                             context = context,
                                             release = release
                                         )
-                                        if (!didStartInstall) {
+                                        if (installResult == UpdateInstallResult.FAILED) {
                                             Toast.makeText(
                                                 context,
                                                 "Unable to auto-install the update. Opening the Releases page for manual download.",
@@ -651,17 +673,27 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
     }
 }
 
-private suspend fun downloadAndInstallReleaseApk(context: Context, release: GitHubRelease): Boolean {
-    val apkDownloadUrl = release.apkDownloadUrl?.trim().orEmpty()
-    if (apkDownloadUrl.isBlank()) {
-        return false
+private suspend fun downloadAndInstallReleaseApk(context: Context, release: GitHubRelease): UpdateInstallResult {
+    if (!hasUnknownSourcesPermission(context)) {
+        openUnknownSourcesSettings(context)
+        Toast.makeText(
+            context,
+            "Please allow installs from this app in Settings, then try updating again.",
+            Toast.LENGTH_LONG
+        ).show()
+        return UpdateInstallResult.MISSING_INSTALL_PERMISSION
     }
 
-    val downloadUri = runCatching { URI(apkDownloadUrl) }.getOrNull() ?: return false
+    val apkDownloadUrl = release.apkDownloadUrl?.trim().orEmpty()
+    if (apkDownloadUrl.isBlank()) {
+        return UpdateInstallResult.FAILED
+    }
+
+    val downloadUri = runCatching { URI(apkDownloadUrl) }.getOrNull() ?: return UpdateInstallResult.FAILED
     val host = downloadUri.host?.lowercase(Locale.US).orEmpty()
     val allowedHosts = setOf("github.com", "objects.githubusercontent.com", "github-releases.githubusercontent.com")
     if (!downloadUri.scheme.equals("https", ignoreCase = true) || host !in allowedHosts) {
-        return false
+        return UpdateInstallResult.FAILED
     }
 
     val apkFile = withContext(Dispatchers.IO) {
@@ -680,9 +712,9 @@ private suspend fun downloadAndInstallReleaseApk(context: Context, release: GitH
             }
             destination.takeIf(::isValidDownloadedApk)
         }.getOrNull()
-    } ?: return false
+    } ?: return UpdateInstallResult.FAILED
 
-    return startApkInstall(context, apkFile)
+    return if (startApkInstall(context, apkFile)) UpdateInstallResult.STARTED else UpdateInstallResult.FAILED
 }
 
 private fun sanitizeApkFileName(rawName: String): String {
@@ -702,21 +734,19 @@ private fun isValidDownloadedApk(file: File): Boolean {
     return file.exists() && file.length() > 0L && file.extension.equals("apk", ignoreCase = true)
 }
 
-private fun startApkInstall(context: Context, apkFile: File): Boolean {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.packageManager.canRequestPackageInstalls()) {
-        val settingsIntent = Intent(
-            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-            Uri.parse("package:${context.packageName}")
-        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(settingsIntent)
-        Toast.makeText(
-            context,
-            "Please allow installs from this app in Settings, then try updating again.",
-            Toast.LENGTH_LONG
-        ).show()
-        return false
-    }
+private fun hasUnknownSourcesPermission(context: Context): Boolean {
+    return Build.VERSION.SDK_INT < Build.VERSION_CODES.O || context.packageManager.canRequestPackageInstalls()
+}
 
+private fun openUnknownSourcesSettings(context: Context) {
+    val settingsIntent = Intent(
+        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+        Uri.parse("package:${context.packageName}")
+    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    context.startActivity(settingsIntent)
+}
+
+private fun startApkInstall(context: Context, apkFile: File): Boolean {
     val apkUri = runCatching {
         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", apkFile)
     }.getOrNull() ?: return false

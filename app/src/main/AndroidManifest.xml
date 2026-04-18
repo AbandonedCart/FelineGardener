@@ -8,6 +8,7 @@
         android:icon="@drawable/ic_launcher_cat_plant"
         android:label="@string/app_name"
         android:roundIcon="@drawable/ic_launcher_cat_plant"
+        android:usesCleartextTraffic="true"
         android:supportsRtl="true"
         android:theme="@style/Theme.FelineGardener">
         <provider

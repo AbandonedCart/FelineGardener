@@ -36,7 +36,6 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -213,29 +212,7 @@ object AspcaPlantService {
             .trim()
             .ifBlank { return null }
 
-        return normalizeAspcaImageUrl(resolved)
-    }
-
-    private fun normalizeAspcaImageUrl(url: String): String {
-        val uri = runCatching { URI(url) }.getOrElse { return url }
-        val host = uri.host?.lowercase(Locale.US) ?: return url
-        val isAspcaHost = host == "aspca.org" || host == "www.aspca.org"
-        val isHttp = uri.scheme.equals("http", ignoreCase = true)
-        if (!isAspcaHost || !isHttp) {
-            return url
-        }
-
-        return runCatching {
-            URI(
-                "https",
-                uri.userInfo,
-                uri.host,
-                uri.port,
-                uri.path,
-                uri.query,
-                uri.fragment
-            ).toString()
-        }.getOrElse { url }
+        return resolved
     }
 
     private fun parsePlantNameAndAlternateNames(rawName: String): Pair<String, List<String>> {
@@ -496,9 +473,7 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
     var isUpdateDialogVisible by remember { mutableStateOf(false) }
 
     Scaffold(
-        topBar = {
-            TopAppBar(title = { Text("Feline Gardener") })
-        }
+        topBar = {}
     ) { innerPadding ->
         Column(
             modifier = Modifier

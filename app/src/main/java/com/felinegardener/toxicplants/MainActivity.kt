@@ -67,7 +67,7 @@ import java.util.Locale
 
 private const val ASPCA_CATS_LIST_URL = "https://www.aspca.org/pet-care/animal-poison-control/cats-plant-list"
 private const val ASPCA_PLANT_PATH_SEGMENT = "/toxic-and-non-toxic-plants/"
-private const val ASPCA_LOGO_IMAGE_URL = "http://www.aspca.org/sites/default/files/aspca-logo-square.png"
+private const val ASPCA_LOGO_IMAGE_URL = "https://www.aspca.org/sites/default/files/aspca-logo-square.png"
 private const val GITHUB_REPO_OWNER = "AbandonedCart"
 private const val GITHUB_REPO_NAME = "FelineGardener"
 private const val GITHUB_RELEASES_URL = "https://github.com/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases/latest"

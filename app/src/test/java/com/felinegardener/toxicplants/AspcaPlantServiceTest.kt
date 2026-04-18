@@ -87,7 +87,7 @@ class AspcaPlantServiceTest {
 
         val details = AspcaPlantService.parsePlantDetailsFromHtml(html)
 
-        assertEquals("http://www.aspca.org/sites/default/files/aspca-logo-square.png", details.imageUrl)
+        assertEquals("https://www.aspca.org/sites/default/files/aspca-logo-square.png", details.imageUrl)
     }
 
     @Test
@@ -129,7 +129,7 @@ class AspcaPlantServiceTest {
 
         val details = AspcaPlantService.parsePlantDetailsFromHtml(html)
 
-        assertEquals("http://www.aspca.org/sites/default/files/aspca-logo-square.png", details.imageUrl)
+        assertEquals("https://www.aspca.org/sites/default/files/aspca-logo-square.png", details.imageUrl)
     }
 
     @Test
@@ -178,8 +178,8 @@ class AspcaPlantServiceTest {
     @Test
     fun filterPlants_returnsAllWhenQueryIsBlank() {
         val plants = listOf(
-            ToxicPlant("Lily", "https://example/lily", null, PlantToxicityGroup.TOXIC),
-            ToxicPlant("Aloe Vera", "https://example/aloe", null, PlantToxicityGroup.NON_TOXIC)
+            ToxicPlant("Lily", "https://example/lily", null, toxicityGroup = PlantToxicityGroup.TOXIC),
+            ToxicPlant("Aloe Vera", "https://example/aloe", null, toxicityGroup = PlantToxicityGroup.NON_TOXIC)
         )
 
         val filtered = filterPlants(plants, "   ")
@@ -191,9 +191,9 @@ class AspcaPlantServiceTest {
     @Test
     fun splitPlantsByToxicity_returnsToxicAndNonToxicBuckets() {
         val plants = listOf(
-            ToxicPlant("Lily", "https://example/lily", null, PlantToxicityGroup.TOXIC),
-            ToxicPlant("Aloe Vera", "https://example/aloe", null, PlantToxicityGroup.NON_TOXIC),
-            ToxicPlant("Azalea", "https://example/azalea", null, PlantToxicityGroup.TOXIC)
+            ToxicPlant("Lily", "https://example/lily", null, toxicityGroup = PlantToxicityGroup.TOXIC),
+            ToxicPlant("Aloe Vera", "https://example/aloe", null, toxicityGroup = PlantToxicityGroup.NON_TOXIC),
+            ToxicPlant("Azalea", "https://example/azalea", null, toxicityGroup = PlantToxicityGroup.TOXIC)
         )
 
         val (toxic, nonToxic) = splitPlantsByToxicity(plants)
@@ -205,7 +205,7 @@ class AspcaPlantServiceTest {
     @Test
     fun selectToxicityGroupForFilteredPlants_prefersGroupWithMatchesWhenCurrentHasNone() {
         val filtered = listOf(
-            ToxicPlant("Spider Plant", "https://example/spider-plant", null, PlantToxicityGroup.NON_TOXIC)
+            ToxicPlant("Spider Plant", "https://example/spider-plant", null, toxicityGroup = PlantToxicityGroup.NON_TOXIC)
         )
 
         val selected = selectToxicityGroupForFilteredPlants(filtered, PlantToxicityGroup.TOXIC)

@@ -289,12 +289,11 @@ object AspcaPlantService {
     }
 
     private fun URI.withHttpsScheme(): URI {
-        val sanitizedPort = if (port == 80) -1 else port
         return URI(
             HTTPS_SCHEME,
             userInfo,
             host,
-            sanitizedPort,
+            -1,
             path,
             query,
             fragment

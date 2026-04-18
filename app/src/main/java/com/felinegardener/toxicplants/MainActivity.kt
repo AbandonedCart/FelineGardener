@@ -757,8 +757,9 @@ private fun PlantRow(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
     ) {
-        val displayImageUrl = imageUrl ?: ASPCA_LOGO_IMAGE_URL
-        val imageContentDescription = if (imageUrl.isNullOrBlank()) {
+        val hasPlantImage = !imageUrl.isNullOrBlank()
+        val displayImageUrl = if (hasPlantImage) imageUrl else ASPCA_LOGO_IMAGE_URL
+        val imageContentDescription = if (!hasPlantImage) {
             "ASPCA logo placeholder for ${plant.name}"
         } else {
             plant.name

@@ -238,7 +238,7 @@ object AspcaPlantService {
         if (!hasSupportedScheme || resolvedUri.host.isNullOrBlank()) {
             return null
         }
-        if (resolvedUri.path.contains(ASPCA_LAZYLOADER_PLACEHOLDER_PATH_SEGMENT, ignoreCase = true)) {
+        if (resolvedUri.path?.contains(ASPCA_LAZYLOADER_PLACEHOLDER_PATH_SEGMENT, ignoreCase = true) == true) {
             return null
         }
 

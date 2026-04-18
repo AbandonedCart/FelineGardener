@@ -6,6 +6,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +19,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -47,12 +53,18 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 
 private const val ASPCA_CATS_LIST_URL = "https://www.aspca.org/pet-care/animal-poison-control/cats-plant-list"
-private const val ASPCA_PLANT_PATH_SEGMENT = "/pet-care/animal-poison-control/toxic-and-non-toxic-plants/"
+private const val ASPCA_PLANT_PATH_SEGMENT = "/toxic-and-non-toxic-plants/"
+
+enum class PlantToxicityGroup {
+    TOXIC,
+    NON_TOXIC
+}
 
 data class ToxicPlant(
     val name: String,
     val detailsUrl: String,
-    val imageUrl: String?
+    val imageUrl: String?,
+    val toxicityGroup: PlantToxicityGroup = PlantToxicityGroup.TOXIC
 )
 
 data class ToxicPlantsUiState(
@@ -85,6 +97,19 @@ object AspcaPlantService {
                 if (name.isBlank() || detailsUrl.isBlank() || detailsUrl == ASPCA_CATS_LIST_URL) {
                     null
                 } else {
+                    val sectionHeaderText = anchor.parents()
+                        .firstOrNull { parent ->
+                            parent.classNames().contains("view-all-plants-list")
+                        }
+                        ?.selectFirst(".view-header h2")
+                        ?.text()
+                        ?.trim()
+                        .orEmpty()
+                    val toxicityGroup = if (sectionHeaderText.contains("non-toxic", ignoreCase = true)) {
+                        PlantToxicityGroup.NON_TOXIC
+                    } else {
+                        PlantToxicityGroup.TOXIC
+                    }
                     val imageUrl = anchor.parents()
                         .flatMap { it.select("img").toList() }
                         .firstNotNullOfOrNull { imageElement ->
@@ -92,11 +117,23 @@ object AspcaPlantService {
                                 imageElement.absUrl("data-src")
                             }.takeIf { it.isNotBlank() }
                         }
-                    ToxicPlant(name = name, detailsUrl = detailsUrl, imageUrl = imageUrl)
+                    ToxicPlant(
+                        name = name,
+                        detailsUrl = detailsUrl,
+                        imageUrl = imageUrl,
+                        toxicityGroup = toxicityGroup
+                    )
                 }
             }
-            .distinctBy { plant -> plant.name.lowercase() }
-            .sortedBy { plant -> plant.name.lowercase() }
+            .distinctBy { plant -> "${plant.toxicityGroup}:${plant.name.lowercase()}" }
+            .sortedWith(
+                compareBy<ToxicPlant> { plant ->
+                    when (plant.toxicityGroup) {
+                        PlantToxicityGroup.TOXIC -> 0
+                        PlantToxicityGroup.NON_TOXIC -> 1
+                    }
+                }.thenBy { plant -> plant.name.lowercase() }
+            )
     }
 
     suspend fun fetchPlantImage(detailsUrl: String): String? = withContext(Dispatchers.IO) {
@@ -119,6 +156,10 @@ fun filterPlants(plants: List<ToxicPlant>, query: String): List<ToxicPlant> {
     return plants.filter { plant ->
         plant.name.contains(trimmedQuery, ignoreCase = true)
     }
+}
+
+fun splitPlantsByToxicity(plants: List<ToxicPlant>): Pair<List<ToxicPlant>, List<ToxicPlant>> {
+    return plants.partition { it.toxicityGroup == PlantToxicityGroup.TOXIC }
 }
 
 class ToxicPlantsViewModel : ViewModel() {
@@ -192,7 +233,7 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Toxic Plants for Cats") })
+            TopAppBar(title = { Text("Feline Gardener") })
         }
     ) { innerPadding ->
         Column(
@@ -209,6 +250,13 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
                 label = { Text("Search plants") },
                 singleLine = true
             )
+            if (!uiState.isLoading && uiState.errorMessage == null) {
+                Text(
+                    text = "Showing ${uiState.filteredPlants.size} plants",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
             when {
                 uiState.isLoading -> {
@@ -226,21 +274,91 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
                 }
 
                 else -> {
+                    val (toxicPlants, nonToxicPlants) = splitPlantsByToxicity(uiState.filteredPlants)
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         contentPadding = PaddingValues(bottom = 20.dp)
                     ) {
-                        items(uiState.filteredPlants, key = { it.detailsUrl }) { plant ->
-                            val imageUrl = uiState.imageOverrides[plant.detailsUrl] ?: plant.imageUrl
-                            PlantRow(
-                                plant = plant,
-                                imageUrl = imageUrl,
-                                onNeedImage = { viewModel.ensurePlantImage(plant.detailsUrl) }
-                            )
+                        if (toxicPlants.isNotEmpty()) {
+                            item(key = "toxic-header") {
+                                GroupHeader(
+                                    text = "Plants Toxic to Cats",
+                                    count = toxicPlants.size
+                                )
+                            }
+                            items(toxicPlants, key = { it.detailsUrl }) { plant ->
+                                val imageUrl = uiState.imageOverrides[plant.detailsUrl] ?: plant.imageUrl
+                                PlantRow(
+                                    plant = plant,
+                                    imageUrl = imageUrl,
+                                    onNeedImage = { viewModel.ensurePlantImage(plant.detailsUrl) }
+                                )
+                            }
+                        }
+
+                        if (nonToxicPlants.isNotEmpty()) {
+                            item(key = "non-toxic-header") {
+                                GroupHeader(
+                                    text = "Plants Non-Toxic to Cats",
+                                    count = nonToxicPlants.size
+                                )
+                            }
+                            items(nonToxicPlants, key = { it.detailsUrl }) { plant ->
+                                val imageUrl = uiState.imageOverrides[plant.detailsUrl] ?: plant.imageUrl
+                                PlantRow(
+                                    plant = plant,
+                                    imageUrl = imageUrl,
+                                    onNeedImage = { viewModel.ensurePlantImage(plant.detailsUrl) }
+                                )
+                            }
+                        }
+
+                        if (uiState.filteredPlants.isEmpty()) {
+                            item(key = "empty-state") {
+                                Card(
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                ) {
+                                    Text(
+                                        text = "No plants found for your search.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.padding(16.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun GroupHeader(text: String, count: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+            modifier = Modifier.weight(1f)
+        )
+        Box(
+            modifier = Modifier
+                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
+                .padding(horizontal = 10.dp, vertical = 4.dp)
+        ) {
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
         }
     }
 }
@@ -259,27 +377,53 @@ private fun PlantRow(
         }
     }
 
-    Row(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable {
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(plant.detailsUrl)))
             },
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
     ) {
-        AsyncImage(
-            model = imageUrl,
-            contentDescription = plant.name,
-            modifier = Modifier.size(88.dp),
-            contentScale = ContentScale.Crop
-        )
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (imageUrl.isNullOrBlank()) {
+                Box(
+                    modifier = Modifier
+                        .size(88.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(12.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = plant.name.firstOrNull()?.uppercase() ?: "?",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = plant.name,
+                    modifier = Modifier.size(88.dp),
+                    contentScale = ContentScale.Crop
+                )
+            }
 
-        Text(
-            text = plant.name,
-            style = MaterialTheme.typography.titleMedium,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
+            Text(
+                text = plant.name,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }

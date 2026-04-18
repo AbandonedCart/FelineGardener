@@ -3,6 +3,27 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
+val keystorePassword = System.getenv("KEYSTORE_PASSWORD")
+val signingKeyAlias = System.getenv("KEY_ALIAS")
+val requiresReleaseSigning = gradle.startParameter.taskNames.any { taskName ->
+    taskName.contains("release", ignoreCase = true) ||
+        taskName.contains("publish", ignoreCase = true) ||
+        taskName.contains("bundle", ignoreCase = true) ||
+        taskName.contains("sign", ignoreCase = true)
+}
+
+if (requiresReleaseSigning) {
+    val missingVariables = buildList {
+        if (keystorePassword.isNullOrBlank()) add("KEYSTORE_PASSWORD")
+        if (signingKeyAlias.isNullOrBlank()) add("KEY_ALIAS")
+    }
+    if (missingVariables.isNotEmpty()) {
+        throw GradleException(
+            "Missing required signing environment variable(s): ${missingVariables.joinToString(", ")}."
+        )
+    }
+}
+
 android {
     namespace = "com.felinegardener.toxicplants"
     compileSdk = 34
@@ -17,9 +38,19 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = rootProject.file("app/signing/release.keystore")
+            storePassword = keystorePassword
+            keyAlias = signingKeyAlias
+            keyPassword = keystorePassword
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

@@ -6,18 +6,24 @@ import org.junit.Test
 
 class AspcaPlantServiceTest {
     @Test
-    fun parsePlantListFromHtml_extractsPlantEntriesAndNormalizesDuplicates() {
+    fun parsePlantListFromHtml_extractsPlantEntriesAndSplitsToxicityGroups() {
         val html = """
             <html><body>
-                <div class="plant-entry">
-                    <a href="/pet-care/animal-poison-control/toxic-and-non-toxic-plants/lily">Lily</a>
-                    <img src="https://images.example/lily.jpg" />
+                <div class="view-all-plants-list">
+                    <div class="view-header"><h2>Plants Toxic to Cats</h2></div>
+                    <div class="plant-entry">
+                        <a href="/pet-care/aspca-poison-control/toxic-and-non-toxic-plants/lily">Lily</a>
+                        <img src="https://images.example/lily.jpg" />
+                    </div>
+                </div>
+                <div class="view-all-plants-list">
+                    <div class="view-header"><h2>Plants Non-Toxic to Cats</h2></div>
+                    <div class="plant-entry">
+                        <a href="/pet-care/aspca-poison-control/toxic-and-non-toxic-plants/aloe">Aloe Vera</a>
+                    </div>
                 </div>
                 <div class="plant-entry">
-                    <a href="/pet-care/animal-poison-control/toxic-and-non-toxic-plants/aloe">Aloe Vera</a>
-                </div>
-                <div class="plant-entry">
-                    <a href="/pet-care/animal-poison-control/toxic-and-non-toxic-plants/lily">lily</a>
+                    <a href="/pet-care/aspca-poison-control/toxic-and-non-toxic-plants/lily">lily</a>
                 </div>
             </body></html>
         """.trimIndent()
@@ -25,17 +31,19 @@ class AspcaPlantServiceTest {
         val plants = AspcaPlantService.parsePlantListFromHtml(html)
 
         assertEquals(2, plants.size)
-        assertEquals("Aloe Vera", plants[0].name)
-        assertEquals("Lily", plants[1].name)
-        assertEquals("https://images.example/lily.jpg", plants[1].imageUrl)
+        assertEquals("Lily", plants[0].name)
+        assertEquals(PlantToxicityGroup.TOXIC, plants[0].toxicityGroup)
+        assertEquals("https://images.example/lily.jpg", plants[0].imageUrl)
+        assertEquals("Aloe Vera", plants[1].name)
+        assertEquals(PlantToxicityGroup.NON_TOXIC, plants[1].toxicityGroup)
     }
 
     @Test
     fun filterPlants_matchesCaseInsensitiveSubstrings() {
         val plants = listOf(
-            ToxicPlant("Lily", "https://example/lily", null),
-            ToxicPlant("Aloe Vera", "https://example/aloe", null),
-            ToxicPlant("Azalea", "https://example/azalea", null)
+            ToxicPlant("Lily", "https://example/lily", null, PlantToxicityGroup.TOXIC),
+            ToxicPlant("Aloe Vera", "https://example/aloe", null, PlantToxicityGroup.NON_TOXIC),
+            ToxicPlant("Azalea", "https://example/azalea", null, PlantToxicityGroup.TOXIC)
         )
 
         val filtered = filterPlants(plants, "ale")
@@ -47,13 +55,27 @@ class AspcaPlantServiceTest {
     @Test
     fun filterPlants_returnsAllWhenQueryIsBlank() {
         val plants = listOf(
-            ToxicPlant("Lily", "https://example/lily", null),
-            ToxicPlant("Aloe Vera", "https://example/aloe", null)
+            ToxicPlant("Lily", "https://example/lily", null, PlantToxicityGroup.TOXIC),
+            ToxicPlant("Aloe Vera", "https://example/aloe", null, PlantToxicityGroup.NON_TOXIC)
         )
 
         val filtered = filterPlants(plants, "   ")
 
         assertEquals(2, filtered.size)
         assertTrue(filtered.containsAll(plants))
+    }
+
+    @Test
+    fun splitPlantsByToxicity_returnsToxicAndNonToxicBuckets() {
+        val plants = listOf(
+            ToxicPlant("Lily", "https://example/lily", null, PlantToxicityGroup.TOXIC),
+            ToxicPlant("Aloe Vera", "https://example/aloe", null, PlantToxicityGroup.NON_TOXIC),
+            ToxicPlant("Azalea", "https://example/azalea", null, PlantToxicityGroup.TOXIC)
+        )
+
+        val (toxic, nonToxic) = splitPlantsByToxicity(plants)
+
+        assertEquals(listOf("Lily", "Azalea"), toxic.map { it.name })
+        assertEquals(listOf("Aloe Vera"), nonToxic.map { it.name })
     }
 }

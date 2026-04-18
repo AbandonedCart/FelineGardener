@@ -64,6 +64,23 @@ android {
             )
         }
     }
+    flavorDimensions += "source"
+    productFlavors {
+        create("github") {
+            dimension = "source"
+            manifestPlaceholders["installPermission"] = "android.permission.REQUEST_INSTALL_PACKAGES"
+            manifestPlaceholders["updatesPermission"] = "android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION"
+            buildConfigField("Boolean", "GOOGLE_PLAY", "false")
+        }
+        create("google") {
+            dimension = "source"
+            isDefault = true
+            manifestPlaceholders["installPermission"] = "com.felinegardener.toxicplants.INSTALL"
+            manifestPlaceholders["updatesPermission"] = "com.felinegardener.toxicplants.UPDATES"
+            buildConfigField("Boolean", "GOOGLE_PLAY", "true")
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -96,6 +113,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.jsoup)
     implementation(libs.coil.compose)
+    implementation(libs.androidx.browser)
 
     testImplementation(libs.junit4)
 

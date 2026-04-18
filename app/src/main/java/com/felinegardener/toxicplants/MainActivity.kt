@@ -1,7 +1,9 @@
 package com.felinegardener.toxicplants
 
 import android.content.Intent
+import android.content.ComponentName
 import android.content.Context
+import android.app.PendingIntent
 import android.net.Uri
 import android.os.Bundle
 import android.os.Build
@@ -10,6 +12,11 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.browser.customtabs.CustomTabsClient
+import androidx.browser.customtabs.CustomTabsIntent
+import androidx.browser.customtabs.CustomTabsServiceConnection
+import androidx.browser.customtabs.CustomTabsSession
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -50,6 +57,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
@@ -64,6 +72,7 @@ import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
 import java.util.Locale
+import kotlin.random.Random
 
 private const val ASPCA_CATS_LIST_URL = "https://www.aspca.org/pet-care/animal-poison-control/cats-plant-list"
 private const val ASPCA_PLANT_PATH_SEGMENT = "/toxic-and-non-toxic-plants/"
@@ -494,6 +503,7 @@ class ToxicPlantsViewModel : ViewModel() {
     }
 
     private fun checkForUpdates() {
+        if (BuildConfig.GOOGLE_PLAY) return
         viewModelScope.launch {
             val latestRelease = runCatching { GitHubReleaseService.fetchLatestRelease() }.getOrNull() ?: return@launch
             val currentHash = BuildConfig.GIT_SHORT_HASH.trim()
@@ -539,6 +549,36 @@ class ToxicPlantsViewModel : ViewModel() {
 }
 
 class MainActivity : ComponentActivity() {
+    var customTabsSession: CustomTabsSession? = null
+    private var customTabsClient: CustomTabsClient? = null
+    private val customTabsConnection = object : CustomTabsServiceConnection() {
+        override fun onCustomTabsServiceConnected(name: ComponentName, client: CustomTabsClient) {
+            customTabsClient = client.apply { warmup(0) }
+            customTabsSession = client.newSession(null)?.also { session ->
+                session.mayLaunchUrl(Uri.parse(ASPCA_CATS_LIST_URL), null, null)
+            }
+        }
+
+        override fun onServiceDisconnected(name: ComponentName) {
+            customTabsClient = null
+            customTabsSession = null
+        }
+    }
+
+    var pendingInstallRelease: GitHubRelease? = null
+    val requestInstallLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (packageManager.canRequestPackageInstalls()) {
+            pendingInstallRelease?.let { release ->
+                pendingInstallRelease = null
+                lifecycleScope.launch {
+                    downloadAndInstallReleaseApk(this@MainActivity, release)
+                }
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -548,6 +588,19 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onStart() {
+        super.onStart()
+        val packageName = CustomTabsClient.getPackageName(this, null) ?: return
+        CustomTabsClient.bindCustomTabsService(this, packageName, customTabsConnection)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        runCatching { unbindService(customTabsConnection) }
+        customTabsClient = null
+        customTabsSession = null
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -556,6 +609,7 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
     val uiState = viewModel.uiState
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val customTabsSession = (context as? MainActivity)?.customTabsSession
     var isUpdateDialogVisible by remember { mutableStateOf(false) }
 
     Scaffold { innerPadding ->
@@ -615,8 +669,8 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
                                     isUpdateDialogVisible = false
                                     coroutineScope.launch {
                                         val installResult = downloadAndInstallReleaseApk(
-                                            context = context,
-                                            release = release
+                                            context as MainActivity,
+                                            release
                                         )
                                         if (installResult == UpdateInstallResult.FAILED) {
                                             Toast.makeText(
@@ -702,6 +756,7 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
                                 plant = plant,
                                 imageUrl = imageUrl,
                                 alternateNames = alternateNames,
+                                customTabsSession = customTabsSession,
                                 onNeedDetails = { viewModel.ensurePlantDetails(plant.detailsUrl) }
                             )
                         }
@@ -729,11 +784,17 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
     }
 }
 
-private suspend fun downloadAndInstallReleaseApk(context: Context, release: GitHubRelease): UpdateInstallResult {
-    if (!hasUnknownSourcesPermission(context)) {
-        openUnknownSourcesSettings(context)
+private suspend fun downloadAndInstallReleaseApk(activity: MainActivity, release: GitHubRelease): UpdateInstallResult {
+    if (!activity.packageManager.canRequestPackageInstalls()) {
+        activity.pendingInstallRelease = release
+        activity.requestInstallLauncher.launch(
+            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                data = Uri.parse("package:${activity.packageName}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        )
         Toast.makeText(
-            context,
+            activity,
             "Please allow installs from this app in Settings, then try updating again.",
             Toast.LENGTH_LONG
         ).show()
@@ -759,7 +820,7 @@ private suspend fun downloadAndInstallReleaseApk(context: Context, release: GitH
                 .substringBefore('?')
                 .ifBlank { "FelineGardener-${release.tagName}.apk" }
             val fileName = sanitizeApkFileName(rawFileName)
-            val updatesDir = File(context.cacheDir, UPDATE_CACHE_DIR).apply { mkdirs() }
+            val updatesDir = File(activity.externalCacheDir ?: activity.cacheDir, UPDATE_CACHE_DIR).apply { mkdirs() }
             val destination = File(updatesDir, fileName)
             URL(apkDownloadUrl).openStream().use { input ->
                 destination.outputStream().use { output ->
@@ -770,7 +831,41 @@ private suspend fun downloadAndInstallReleaseApk(context: Context, release: GitH
         }.getOrNull()
     } ?: return UpdateInstallResult.FAILED
 
-    return if (startApkInstall(context, apkFile)) UpdateInstallResult.STARTED else UpdateInstallResult.FAILED
+    return if (installApkViaSession(activity, apkFile)) UpdateInstallResult.STARTED else UpdateInstallResult.FAILED
+}
+
+private fun installApkViaSession(activity: MainActivity, apkFile: File): Boolean {
+    return runCatching {
+        val apkUri = FileProvider.getUriForFile(
+            activity.applicationContext,
+            "${activity.packageName}.fileprovider",
+            apkFile
+        )
+        activity.applicationContext.contentResolver.openInputStream(apkUri).use { apkStream ->
+            val packageInstaller = activity.applicationContext.packageManager.packageInstaller
+            val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+            }
+            val sessionId = packageInstaller.createSession(params)
+            val session = packageInstaller.openSession(sessionId)
+            session.openWrite("package", 0, apkFile.length()).use { sessionStream ->
+                apkStream?.copyTo(sessionStream)
+                session.fsync(sessionStream)
+            }
+            val pi = PendingIntent.getBroadcast(
+                activity.applicationContext,
+                Random.nextInt(),
+                Intent(activity.applicationContext, UpdateReceiver::class.java),
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+                else
+                    PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            session.commit(pi.intentSender)
+        }
+        true
+    }.getOrElse { false }
 }
 
 private fun sanitizeApkFileName(rawName: String): String {
@@ -790,40 +885,12 @@ private fun isValidDownloadedApk(file: File): Boolean {
     return file.exists() && file.length() > 0L && file.extension.equals("apk", ignoreCase = true)
 }
 
-private fun hasUnknownSourcesPermission(context: Context): Boolean {
-    return Build.VERSION.SDK_INT < Build.VERSION_CODES.O || context.packageManager.canRequestPackageInstalls()
-}
-
-private fun openUnknownSourcesSettings(context: Context) {
-    val settingsIntent = Intent(
-        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-        Uri.parse("package:${context.packageName}")
-    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    context.startActivity(settingsIntent)
-}
-
-private fun startApkInstall(context: Context, apkFile: File): Boolean {
-    val apkUri = runCatching {
-        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", apkFile)
-    }.getOrNull() ?: return false
-
-    val installIntent = Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(apkUri, "application/vnd.android.package-archive")
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    }
-
-    return runCatching {
-        context.startActivity(installIntent)
-        true
-    }.getOrElse { false }
-}
-
 @Composable
 private fun PlantRow(
     plant: ToxicPlant,
     imageUrl: String?,
     alternateNames: List<String>,
+    customTabsSession: CustomTabsSession?,
     onNeedDetails: () -> Unit
 ) {
     val context = LocalContext.current
@@ -836,7 +903,8 @@ private fun PlantRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable {
-                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(plant.detailsUrl)))
+                CustomTabsIntent.Builder(customTabsSession).build()
+                    .launchUrl(context, Uri.parse(plant.detailsUrl))
             },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(

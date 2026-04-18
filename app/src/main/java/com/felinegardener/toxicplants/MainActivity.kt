@@ -47,12 +47,18 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 
 private const val ASPCA_CATS_LIST_URL = "https://www.aspca.org/pet-care/animal-poison-control/cats-plant-list"
-private const val ASPCA_PLANT_PATH_SEGMENT = "/pet-care/animal-poison-control/toxic-and-non-toxic-plants/"
+private const val ASPCA_PLANT_PATH_SEGMENT = "/toxic-and-non-toxic-plants/"
+
+enum class PlantToxicityGroup {
+    TOXIC,
+    NON_TOXIC
+}
 
 data class ToxicPlant(
     val name: String,
     val detailsUrl: String,
-    val imageUrl: String?
+    val imageUrl: String?,
+    val toxicityGroup: PlantToxicityGroup = PlantToxicityGroup.TOXIC
 )
 
 data class ToxicPlantsUiState(
@@ -85,6 +91,19 @@ object AspcaPlantService {
                 if (name.isBlank() || detailsUrl.isBlank() || detailsUrl == ASPCA_CATS_LIST_URL) {
                     null
                 } else {
+                    val sectionHeaderText = anchor.parents()
+                        .firstOrNull { parent ->
+                            parent.classNames().contains("view-all-plants-list")
+                        }
+                        ?.selectFirst(".view-header h2")
+                        ?.text()
+                        ?.trim()
+                        .orEmpty()
+                    val toxicityGroup = if (sectionHeaderText.contains("non-toxic", ignoreCase = true)) {
+                        PlantToxicityGroup.NON_TOXIC
+                    } else {
+                        PlantToxicityGroup.TOXIC
+                    }
                     val imageUrl = anchor.parents()
                         .flatMap { it.select("img").toList() }
                         .firstNotNullOfOrNull { imageElement ->
@@ -92,11 +111,23 @@ object AspcaPlantService {
                                 imageElement.absUrl("data-src")
                             }.takeIf { it.isNotBlank() }
                         }
-                    ToxicPlant(name = name, detailsUrl = detailsUrl, imageUrl = imageUrl)
+                    ToxicPlant(
+                        name = name,
+                        detailsUrl = detailsUrl,
+                        imageUrl = imageUrl,
+                        toxicityGroup = toxicityGroup
+                    )
                 }
             }
-            .distinctBy { plant -> plant.name.lowercase() }
-            .sortedBy { plant -> plant.name.lowercase() }
+            .distinctBy { plant -> plant.detailsUrl.lowercase() }
+            .sortedWith(
+                compareBy<ToxicPlant> { plant ->
+                    when (plant.toxicityGroup) {
+                        PlantToxicityGroup.TOXIC -> 0
+                        PlantToxicityGroup.NON_TOXIC -> 1
+                    }
+                }.thenBy { plant -> plant.name.lowercase() }
+            )
     }
 
     suspend fun fetchPlantImage(detailsUrl: String): String? = withContext(Dispatchers.IO) {
@@ -119,6 +150,18 @@ fun filterPlants(plants: List<ToxicPlant>, query: String): List<ToxicPlant> {
     return plants.filter { plant ->
         plant.name.contains(trimmedQuery, ignoreCase = true)
     }
+}
+
+fun splitPlantsByToxicity(plants: List<ToxicPlant>): Pair<List<ToxicPlant>, List<ToxicPlant>> {
+    val toxic = mutableListOf<ToxicPlant>()
+    val nonToxic = mutableListOf<ToxicPlant>()
+    plants.forEach { plant ->
+        when (plant.toxicityGroup) {
+            PlantToxicityGroup.TOXIC -> toxic += plant
+            PlantToxicityGroup.NON_TOXIC -> nonToxic += plant
+        }
+    }
+    return toxic to nonToxic
 }
 
 class ToxicPlantsViewModel : ViewModel() {
@@ -226,17 +269,52 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
                 }
 
                 else -> {
+                    val (toxicPlants, nonToxicPlants) = splitPlantsByToxicity(uiState.filteredPlants)
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         contentPadding = PaddingValues(bottom = 20.dp)
                     ) {
-                        items(uiState.filteredPlants, key = { it.detailsUrl }) { plant ->
-                            val imageUrl = uiState.imageOverrides[plant.detailsUrl] ?: plant.imageUrl
-                            PlantRow(
-                                plant = plant,
-                                imageUrl = imageUrl,
-                                onNeedImage = { viewModel.ensurePlantImage(plant.detailsUrl) }
-                            )
+                        if (toxicPlants.isNotEmpty()) {
+                            item(key = "toxic-header") {
+                                Text(
+                                    text = "Plants Toxic to Cats",
+                                    style = MaterialTheme.typography.titleLarge
+                                )
+                            }
+                            items(toxicPlants, key = { it.detailsUrl }) { plant ->
+                                val imageUrl = uiState.imageOverrides[plant.detailsUrl] ?: plant.imageUrl
+                                PlantRow(
+                                    plant = plant,
+                                    imageUrl = imageUrl,
+                                    onNeedImage = { viewModel.ensurePlantImage(plant.detailsUrl) }
+                                )
+                            }
+                        }
+
+                        if (nonToxicPlants.isNotEmpty()) {
+                            item(key = "non-toxic-header") {
+                                Text(
+                                    text = "Plants Non-Toxic to Cats",
+                                    style = MaterialTheme.typography.titleLarge
+                                )
+                            }
+                            items(nonToxicPlants, key = { it.detailsUrl }) { plant ->
+                                val imageUrl = uiState.imageOverrides[plant.detailsUrl] ?: plant.imageUrl
+                                PlantRow(
+                                    plant = plant,
+                                    imageUrl = imageUrl,
+                                    onNeedImage = { viewModel.ensurePlantImage(plant.detailsUrl) }
+                                )
+                            }
+                        }
+
+                        if (uiState.filteredPlants.isEmpty()) {
+                            item(key = "empty-state") {
+                                Text(
+                                    text = "No plants found for your search.",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
                         }
                     }
                 }

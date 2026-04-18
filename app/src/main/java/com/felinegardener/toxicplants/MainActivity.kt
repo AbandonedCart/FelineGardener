@@ -1,8 +1,12 @@
 package com.felinegardener.toxicplants
 
 import android.content.Intent
+import android.content.Context
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
+import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -24,17 +28,21 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,6 +50,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -52,8 +61,11 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
+import java.io.File
 import java.net.HttpURLConnection
+import java.net.URI
 import java.net.URL
+import java.util.Locale
 
 private const val ASPCA_CATS_LIST_URL = "https://www.aspca.org/pet-care/animal-poison-control/cats-plant-list"
 private const val ASPCA_PLANT_PATH_SEGMENT = "/toxic-and-non-toxic-plants/"
@@ -61,6 +73,10 @@ private const val GITHUB_REPO_OWNER = "AbandonedCart"
 private const val GITHUB_REPO_NAME = "FelineGardener"
 private const val GITHUB_RELEASES_URL = "https://github.com/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases/latest"
 private const val GITHUB_LATEST_RELEASE_API_URL = "https://api.github.com/repos/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases/latest"
+private const val UPDATE_CACHE_DIR = "updates"
+private const val MAX_UPDATE_APK_FILENAME_LENGTH = 120
+private val INVALID_FILENAME_CHARS = Regex("[^A-Za-z0-9._-]")
+private val CONSECUTIVE_UNDERSCORES = Regex("_+")
 
 enum class PlantToxicityGroup {
     TOXIC,
@@ -82,7 +98,8 @@ data class PlantDetails(
 
 data class GitHubRelease(
     val tagName: String,
-    val htmlUrl: String
+    val htmlUrl: String,
+    val apkDownloadUrl: String?
 )
 
 data class ToxicPlantsUiState(
@@ -164,15 +181,61 @@ object AspcaPlantService {
     }
 
     private fun parsePlantDetails(document: Document): PlantDetails {
-        val imageUrl = document.selectFirst("meta[property=og:image]")?.attr("content")?.takeIf { it.isNotBlank() }
-            ?: document.selectFirst("meta[name=twitter:image]")?.attr("content")?.takeIf { it.isNotBlank() }
-            ?: document.select("img[src]").firstOrNull()?.absUrl("src")?.takeIf { it.isNotBlank() }
+        val imageUrl = resolveImageUrl(
+            document = document,
+            rawValue = document.selectFirst("meta[property=og:image]")?.attr("content")
+        )
+            ?: resolveImageUrl(
+                document = document,
+                rawValue = document.selectFirst("meta[name=twitter:image]")?.attr("content")
+            )
+            ?: resolveImageUrl(
+                document = document,
+                rawValue = document.select("img[src]").firstOrNull()?.attr("src")
+            )
 
         val alternateNames = parseAlternateNamesFromDetailDocument(document)
         return PlantDetails(
             imageUrl = imageUrl,
             alternateNames = alternateNames
         )
+    }
+
+    private fun resolveImageUrl(document: Document, rawValue: String?): String? {
+        val trimmed = rawValue?.trim().orEmpty()
+        if (trimmed.isBlank()) {
+            return null
+        }
+
+        val baseUrl = document.baseUri().ifBlank { ASPCA_CATS_LIST_URL }
+        val resolved = runCatching { URL(URL(baseUrl), trimmed).toString() }
+            .getOrElse { trimmed }
+            .trim()
+            .ifBlank { return null }
+
+        return normalizeAspcaImageUrl(resolved)
+    }
+
+    private fun normalizeAspcaImageUrl(url: String): String {
+        val uri = runCatching { URI(url) }.getOrElse { return url }
+        val host = uri.host?.lowercase(Locale.US) ?: return url
+        val isAspcaHost = host == "aspca.org" || host == "www.aspca.org"
+        val isHttp = uri.scheme.equals("http", ignoreCase = true)
+        if (!isAspcaHost || !isHttp) {
+            return url
+        }
+
+        return runCatching {
+            URI(
+                "https",
+                uri.userInfo,
+                uri.host,
+                uri.port,
+                uri.path,
+                uri.query,
+                uri.fragment
+            ).toString()
+        }.getOrElse { url }
     }
 
     private fun parsePlantNameAndAlternateNames(rawName: String): Pair<String, List<String>> {
@@ -249,19 +312,42 @@ object GitHubReleaseService {
                     null
                 } else {
                     val body = connection.inputStream.bufferedReader().use { reader -> reader.readText() }
-                    val json = JSONObject(body)
-                    val tagName = json.optString("tag_name").trim()
-                    val htmlUrl = json.optString("html_url").trim().ifBlank { GITHUB_RELEASES_URL }
-                    if (tagName.isBlank()) {
-                        null
-                    } else {
-                        GitHubRelease(tagName = tagName, htmlUrl = htmlUrl)
-                    }
+                    parseLatestReleaseFromJson(body)
                 }
             } finally {
                 connection.disconnect()
             }
         }.getOrNull()
+    }
+
+    fun parseLatestReleaseFromJson(body: String): GitHubRelease? {
+        val json = runCatching { JSONObject(body) }.getOrNull() ?: return null
+        val tagName = json.optString("tag_name").trim()
+        if (tagName.isBlank()) {
+            return null
+        }
+        val htmlUrl = json.optString("html_url").trim().ifBlank { GITHUB_RELEASES_URL }
+        val assets = json.optJSONArray("assets")
+        val apkUrls = assets?.let { array ->
+            (0 until array.length())
+                .asSequence()
+                .mapNotNull { index -> array.optJSONObject(index) }
+                .mapNotNull { asset ->
+                    asset.optString("browser_download_url").trim().ifBlank { null }
+                }
+                .filter { url ->
+                    url.substringBefore('?').endsWith(".apk", ignoreCase = true)
+                }
+                .toList()
+        }.orEmpty()
+        val apkDownloadUrl = apkUrls.firstOrNull { url ->
+            url.substringAfterLast('/').contains("felinegardener", ignoreCase = true)
+        } ?: apkUrls.firstOrNull()
+        return GitHubRelease(
+            tagName = tagName,
+            htmlUrl = htmlUrl,
+            apkDownloadUrl = apkDownloadUrl
+        )
     }
 }
 
@@ -406,6 +492,8 @@ class MainActivity : ComponentActivity() {
 fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
     val uiState = viewModel.uiState
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var isUpdateDialogVisible by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -431,7 +519,7 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(release.htmlUrl)))
+                            isUpdateDialogVisible = true
                         },
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
@@ -453,6 +541,46 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
                             color = MaterialTheme.colorScheme.onTertiaryContainer
                         )
                     }
+                }
+
+                if (isUpdateDialogVisible) {
+                    AlertDialog(
+                        onDismissRequest = { isUpdateDialogVisible = false },
+                        title = { Text("Install update ${release.tagName}?") },
+                        text = {
+                            Text("This will download the latest APK and start installation.")
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    isUpdateDialogVisible = false
+                                    coroutineScope.launch {
+                                        val didStartInstall = downloadAndInstallReleaseApk(
+                                            context = context,
+                                            release = release
+                                        )
+                                        if (!didStartInstall) {
+                                            Toast.makeText(
+                                                context,
+                                                "Unable to auto-install the update. Opening the Releases page for manual download.",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                            context.startActivity(
+                                                Intent(Intent.ACTION_VIEW, Uri.parse(release.htmlUrl))
+                                            )
+                                        }
+                                    }
+                                }
+                            ) {
+                                Text("Download & Install")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { isUpdateDialogVisible = false }) {
+                                Text("Cancel")
+                            }
+                        }
+                    )
                 }
             }
             if (!uiState.isLoading && uiState.errorMessage == null) {
@@ -540,6 +668,88 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
             }
         }
     }
+}
+
+private suspend fun downloadAndInstallReleaseApk(context: Context, release: GitHubRelease): Boolean {
+    val apkDownloadUrl = release.apkDownloadUrl?.trim().orEmpty()
+    if (apkDownloadUrl.isBlank()) {
+        return false
+    }
+
+    val downloadUri = runCatching { URI(apkDownloadUrl) }.getOrNull() ?: return false
+    val host = downloadUri.host?.lowercase(Locale.US).orEmpty()
+    val allowedHosts = setOf("github.com", "objects.githubusercontent.com", "github-releases.githubusercontent.com")
+    if (!downloadUri.scheme.equals("https", ignoreCase = true) || host !in allowedHosts) {
+        return false
+    }
+
+    val apkFile = withContext(Dispatchers.IO) {
+        runCatching {
+            val rawFileName = apkDownloadUrl
+                .substringAfterLast('/')
+                .substringBefore('?')
+                .ifBlank { "FelineGardener-${release.tagName}.apk" }
+            val fileName = sanitizeApkFileName(rawFileName)
+            val updatesDir = File(context.cacheDir, UPDATE_CACHE_DIR).apply { mkdirs() }
+            val destination = File(updatesDir, fileName)
+            URL(apkDownloadUrl).openStream().use { input ->
+                destination.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            destination.takeIf(::isValidDownloadedApk)
+        }.getOrNull()
+    } ?: return false
+
+    return startApkInstall(context, apkFile)
+}
+
+private fun sanitizeApkFileName(rawName: String): String {
+    val cleaned = rawName
+        .replace("/", "_")
+        .replace("\\", "_")
+        .replace("..", "_")
+        .replace(INVALID_FILENAME_CHARS, "_")
+        .replace(CONSECUTIVE_UNDERSCORES, "_")
+        .trim('_', '.')
+        .ifBlank { "FelineGardener-update.apk" }
+    val normalized = if (cleaned.endsWith(".apk", ignoreCase = true)) cleaned else "$cleaned.apk"
+    return normalized.take(MAX_UPDATE_APK_FILENAME_LENGTH)
+}
+
+private fun isValidDownloadedApk(file: File): Boolean {
+    return file.exists() && file.length() > 0L && file.extension.equals("apk", ignoreCase = true)
+}
+
+private fun startApkInstall(context: Context, apkFile: File): Boolean {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.packageManager.canRequestPackageInstalls()) {
+        val settingsIntent = Intent(
+            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+            Uri.parse("package:${context.packageName}")
+        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(settingsIntent)
+        Toast.makeText(
+            context,
+            "Please allow installs from this app in Settings, then try updating again.",
+            Toast.LENGTH_LONG
+        ).show()
+        return false
+    }
+
+    val apkUri = runCatching {
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", apkFile)
+    }.getOrNull() ?: return false
+
+    val installIntent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(apkUri, "application/vnd.android.package-archive")
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+
+    return runCatching {
+        context.startActivity(installIntent)
+        true
+    }.getOrElse { false }
 }
 
 @Composable

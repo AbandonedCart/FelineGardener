@@ -78,6 +78,32 @@ class AspcaPlantServiceTest {
     }
 
     @Test
+    fun parsePlantDetailsFromHtml_upgradesAspcaHttpImageToHttps() {
+        val html = """
+            <html><head>
+                <meta property="og:image" content="http://www.aspca.org/sites/default/files/aspca-logo-square.png" />
+            </head><body></body></html>
+        """.trimIndent()
+
+        val details = AspcaPlantService.parsePlantDetailsFromHtml(html)
+
+        assertEquals("https://www.aspca.org/sites/default/files/aspca-logo-square.png", details.imageUrl)
+    }
+
+    @Test
+    fun parsePlantDetailsFromHtml_resolvesRelativeImagePathUsingBaseUri() {
+        val html = """
+            <html><body>
+                <img src="/sites/default/files/example.png" />
+            </body></html>
+        """.trimIndent()
+
+        val details = AspcaPlantService.parsePlantDetailsFromHtml(html)
+
+        assertEquals("https://www.aspca.org/sites/default/files/example.png", details.imageUrl)
+    }
+
+    @Test
     fun filterPlants_matchesCaseInsensitiveSubstringsInPrimaryAndAlternateNames() {
         val plants = listOf(
             ToxicPlant(
@@ -143,5 +169,38 @@ class AspcaPlantServiceTest {
         val selected = selectToxicityGroupForFilteredPlants(filtered, PlantToxicityGroup.TOXIC)
 
         assertEquals(PlantToxicityGroup.NON_TOXIC, selected)
+    }
+
+    @Test
+    fun parseLatestReleaseFromJson_extractsApkAssetUrl() {
+        val json = """
+            {
+              "tag_name": "abc1234",
+              "html_url": "https://github.com/AbandonedCart/FelineGardener/releases/tag/abc1234",
+              "assets": [
+                { "name": "notes.txt", "browser_download_url": "https://example/notes.txt" },
+                { "name": "FelineGardener-abc1234.apk", "browser_download_url": "https://example/FelineGardener-abc1234.apk" }
+              ]
+            }
+        """.trimIndent()
+
+        val release = GitHubReleaseService.parseLatestReleaseFromJson(json)
+
+        assertEquals("abc1234", release?.tagName)
+        assertEquals("https://example/FelineGardener-abc1234.apk", release?.apkDownloadUrl)
+    }
+
+    @Test
+    fun parseLatestReleaseFromJson_returnsNullWhenTagMissing() {
+        val json = """
+            {
+              "html_url": "https://github.com/AbandonedCart/FelineGardener/releases/latest",
+              "assets": []
+            }
+        """.trimIndent()
+
+        val release = GitHubReleaseService.parseLatestReleaseFromJson(json)
+
+        assertEquals(null, release)
     }
 }

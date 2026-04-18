@@ -78,7 +78,7 @@ class AspcaPlantServiceTest {
     }
 
     @Test
-    fun parsePlantDetailsFromHtml_upgradesAspcaHttpImageToHttps() {
+    fun parsePlantDetailsFromHtml_preservesAspcaHttpImageUrl() {
         val html = """
             <html><head>
                 <meta property="og:image" content="http://www.aspca.org/sites/default/files/aspca-logo-square.png" />
@@ -87,7 +87,7 @@ class AspcaPlantServiceTest {
 
         val details = AspcaPlantService.parsePlantDetailsFromHtml(html)
 
-        assertEquals("https://www.aspca.org/sites/default/files/aspca-logo-square.png", details.imageUrl)
+        assertEquals("http://www.aspca.org/sites/default/files/aspca-logo-square.png", details.imageUrl)
     }
 
     @Test
@@ -101,6 +101,48 @@ class AspcaPlantServiceTest {
         val details = AspcaPlantService.parsePlantDetailsFromHtml(html)
 
         assertEquals("https://www.aspca.org/sites/default/files/example.png", details.imageUrl)
+    }
+
+    @Test
+    fun parsePlantDetailsFromHtml_preservesAspcaHttpsImageWithQueryParams() {
+        val html = """
+            <html><head>
+                <meta property="og:image" content="https://www.aspca.org/sites/default/files/styles/medium_image_300x200/public/field/image/plants/arum-r.jpg?itok=206UUxCJ" />
+            </head><body></body></html>
+        """.trimIndent()
+
+        val details = AspcaPlantService.parsePlantDetailsFromHtml(html)
+
+        assertEquals(
+            "https://www.aspca.org/sites/default/files/styles/medium_image_300x200/public/field/image/plants/arum-r.jpg?itok=206UUxCJ",
+            details.imageUrl
+        )
+    }
+
+    @Test
+    fun parsePlantDetailsFromHtml_fallsBackToAspcaLogoWhenImageMissing() {
+        val html = """
+            <html><body>
+                <h1>No image here</h1>
+            </body></html>
+        """.trimIndent()
+
+        val details = AspcaPlantService.parsePlantDetailsFromHtml(html)
+
+        assertEquals("https://www.aspca.org/sites/default/files/aspca-logo-square.png", details.imageUrl)
+    }
+
+    @Test
+    fun parsePlantDetailsFromHtml_fallsBackToAspcaLogoWhenImageUrlInvalid() {
+        val html = """
+            <html><head>
+                <meta property="og:image" content="javascript:alert('xss')" />
+            </head><body></body></html>
+        """.trimIndent()
+
+        val details = AspcaPlantService.parsePlantDetailsFromHtml(html)
+
+        assertEquals("https://www.aspca.org/sites/default/files/aspca-logo-square.png", details.imageUrl)
     }
 
     @Test
@@ -136,8 +178,8 @@ class AspcaPlantServiceTest {
     @Test
     fun filterPlants_returnsAllWhenQueryIsBlank() {
         val plants = listOf(
-            ToxicPlant("Lily", "https://example/lily", null, PlantToxicityGroup.TOXIC),
-            ToxicPlant("Aloe Vera", "https://example/aloe", null, PlantToxicityGroup.NON_TOXIC)
+            ToxicPlant("Lily", "https://example/lily", null, toxicityGroup = PlantToxicityGroup.TOXIC),
+            ToxicPlant("Aloe Vera", "https://example/aloe", null, toxicityGroup = PlantToxicityGroup.NON_TOXIC)
         )
 
         val filtered = filterPlants(plants, "   ")
@@ -149,9 +191,9 @@ class AspcaPlantServiceTest {
     @Test
     fun splitPlantsByToxicity_returnsToxicAndNonToxicBuckets() {
         val plants = listOf(
-            ToxicPlant("Lily", "https://example/lily", null, PlantToxicityGroup.TOXIC),
-            ToxicPlant("Aloe Vera", "https://example/aloe", null, PlantToxicityGroup.NON_TOXIC),
-            ToxicPlant("Azalea", "https://example/azalea", null, PlantToxicityGroup.TOXIC)
+            ToxicPlant("Lily", "https://example/lily", null, toxicityGroup = PlantToxicityGroup.TOXIC),
+            ToxicPlant("Aloe Vera", "https://example/aloe", null, toxicityGroup = PlantToxicityGroup.NON_TOXIC),
+            ToxicPlant("Azalea", "https://example/azalea", null, toxicityGroup = PlantToxicityGroup.TOXIC)
         )
 
         val (toxic, nonToxic) = splitPlantsByToxicity(plants)
@@ -163,7 +205,7 @@ class AspcaPlantServiceTest {
     @Test
     fun selectToxicityGroupForFilteredPlants_prefersGroupWithMatchesWhenCurrentHasNone() {
         val filtered = listOf(
-            ToxicPlant("Spider Plant", "https://example/spider-plant", null, PlantToxicityGroup.NON_TOXIC)
+            ToxicPlant("Spider Plant", "https://example/spider-plant", null, toxicityGroup = PlantToxicityGroup.NON_TOXIC)
         )
 
         val selected = selectToxicityGroupForFilteredPlants(filtered, PlantToxicityGroup.TOXIC)

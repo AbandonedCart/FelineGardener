@@ -10,7 +10,6 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,7 +35,6 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -69,12 +67,14 @@ import java.util.Locale
 
 private const val ASPCA_CATS_LIST_URL = "https://www.aspca.org/pet-care/animal-poison-control/cats-plant-list"
 private const val ASPCA_PLANT_PATH_SEGMENT = "/toxic-and-non-toxic-plants/"
+private const val ASPCA_LOGO_IMAGE_URL = "https://www.aspca.org/sites/default/files/aspca-logo-square.png"
 private const val GITHUB_REPO_OWNER = "AbandonedCart"
 private const val GITHUB_REPO_NAME = "FelineGardener"
 private const val GITHUB_RELEASES_URL = "https://github.com/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases/latest"
 private const val GITHUB_LATEST_RELEASE_API_URL = "https://api.github.com/repos/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases/latest"
 private const val UPDATE_CACHE_DIR = "updates"
 private const val MAX_UPDATE_APK_FILENAME_LENGTH = 120
+private val SUPPORTED_IMAGE_SCHEMES = setOf("http", "https")
 private val INVALID_FILENAME_CHARS = Regex("[^A-Za-z0-9._-]")
 private val CONSECUTIVE_UNDERSCORES = Regex("_+")
 
@@ -193,6 +193,7 @@ object AspcaPlantService {
                 document = document,
                 rawValue = document.select("img[src]").firstOrNull()?.attr("src")
             )
+            ?: ASPCA_LOGO_IMAGE_URL
 
         val alternateNames = parseAlternateNamesFromDetailDocument(document)
         return PlantDetails(
@@ -213,29 +214,13 @@ object AspcaPlantService {
             .trim()
             .ifBlank { return null }
 
-        return normalizeAspcaImageUrl(resolved)
-    }
-
-    private fun normalizeAspcaImageUrl(url: String): String {
-        val uri = runCatching { URI(url) }.getOrElse { return url }
-        val host = uri.host?.lowercase(Locale.US) ?: return url
-        val isAspcaHost = host == "aspca.org" || host == "www.aspca.org"
-        val isHttp = uri.scheme.equals("http", ignoreCase = true)
-        if (!isAspcaHost || !isHttp) {
-            return url
+        val resolvedUri = runCatching { URI(resolved) }.getOrNull() ?: return null
+        val hasSupportedScheme = resolvedUri.scheme?.lowercase(Locale.US) in SUPPORTED_IMAGE_SCHEMES
+        if (!hasSupportedScheme || resolvedUri.host.isNullOrBlank()) {
+            return null
         }
 
-        return runCatching {
-            URI(
-                "https",
-                uri.userInfo,
-                uri.host,
-                uri.port,
-                uri.path,
-                uri.query,
-                uri.fragment
-            ).toString()
-        }.getOrElse { url }
+        return resolved
     }
 
     private fun parsePlantNameAndAlternateNames(rawName: String): Pair<String, List<String>> {
@@ -495,11 +480,7 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
     val coroutineScope = rememberCoroutineScope()
     var isUpdateDialogVisible by remember { mutableStateOf(false) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(title = { Text("Feline Gardener") })
-        }
-    ) { innerPadding ->
+    Scaffold { innerPadding ->
         Column(
             modifier = Modifier
                 .padding(innerPadding)
@@ -776,35 +757,25 @@ private fun PlantRow(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
     ) {
+        val hasPlantImage = !imageUrl.isNullOrBlank()
+        val displayImageUrl = if (hasPlantImage) imageUrl else ASPCA_LOGO_IMAGE_URL
+        val imageContentDescription = if (!hasPlantImage) {
+            "ASPCA logo placeholder for ${plant.name}"
+        } else {
+            plant.name
+        }
+
         Row(
             modifier = Modifier.padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (imageUrl.isNullOrBlank()) {
-                Box(
-                    modifier = Modifier
-                        .size(88.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            shape = RoundedCornerShape(12.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = plant.name.firstOrNull()?.uppercase() ?: "?",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            } else {
-                AsyncImage(
-                    model = imageUrl,
-                    contentDescription = plant.name,
-                    modifier = Modifier.size(88.dp),
-                    contentScale = ContentScale.Crop
-                )
-            }
+            AsyncImage(
+                model = displayImageUrl,
+                contentDescription = imageContentDescription,
+                modifier = Modifier.size(88.dp),
+                contentScale = ContentScale.Crop
+            )
 
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(

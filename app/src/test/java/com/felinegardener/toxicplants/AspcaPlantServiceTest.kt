@@ -87,7 +87,7 @@ class AspcaPlantServiceTest {
 
         val details = AspcaPlantService.parsePlantDetailsFromHtml(html)
 
-        assertEquals("https://www.aspca.org/sites/default/files/aspca-logo-square.png", details.imageUrl)
+        assertEquals("http://www.aspca.org/sites/default/files/aspca-logo-square.png", details.imageUrl)
     }
 
     @Test

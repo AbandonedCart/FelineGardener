@@ -74,6 +74,7 @@ private const val GITHUB_RELEASES_URL = "https://github.com/$GITHUB_REPO_OWNER/$
 private const val GITHUB_LATEST_RELEASE_API_URL = "https://api.github.com/repos/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases/latest"
 private const val UPDATE_CACHE_DIR = "updates"
 private const val MAX_UPDATE_APK_FILENAME_LENGTH = 120
+private val SUPPORTED_IMAGE_SCHEMES = setOf("http", "https")
 private val INVALID_FILENAME_CHARS = Regex("[^A-Za-z0-9._-]")
 private val CONSECUTIVE_UNDERSCORES = Regex("_+")
 
@@ -214,8 +215,7 @@ object AspcaPlantService {
             .ifBlank { return null }
 
         val resolvedUri = runCatching { URI(resolved) }.getOrNull() ?: return null
-        val supportedSchemes = setOf("http", "https")
-        val hasSupportedScheme = resolvedUri.scheme?.lowercase(Locale.US) in supportedSchemes
+        val hasSupportedScheme = resolvedUri.scheme?.lowercase(Locale.US) in SUPPORTED_IMAGE_SCHEMES
         if (!hasSupportedScheme || resolvedUri.host.isNullOrBlank()) {
             return null
         }

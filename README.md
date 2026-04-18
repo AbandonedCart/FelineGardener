@@ -9,7 +9,9 @@ Android app for cat owners to browse ASPCA toxic plants.
   - `Plants Toxic to Cats`
   - `Plants Non-Toxic to Cats`
 - Shows a searchable list across both groups
-- Displays plant photos (from list entries and ASPCA plant detail pages)
+- Displays plant photos from ASPCA plant detail pages
+- Shows alternate plant names as card subtitles
+- Shows an in-app update banner when a newer GitHub Release is available
 - Tapping a plant opens the ASPCA detail page
 
 ## Release signing and publishing
@@ -17,6 +19,9 @@ Android app for cat owners to browse ASPCA toxic plants.
   - `app/signing/release.keystore`
 - GitHub Actions workflow:
   - `.github/workflows/android-release.yml`
+- Release publication:
+  - On `main` pushes (and manual dispatch), publishes a GitHub Release tagged with the short GitHub commit hash
+  - Release APK filename format: `FelineGardener-(short hash).apk`
 - Configure repository secrets used by the workflow:
   - `KEYSTORE_PASSWORD`
   - `KEY_ALIAS`

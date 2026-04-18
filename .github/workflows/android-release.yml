@@ -5,8 +5,6 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
   pull_request:
     branches:
       - main
@@ -37,7 +35,7 @@ jobs:
         run: ./gradlew --no-daemon :app:assembleDebug
 
   build-and-publish-release:
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
       KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -65,15 +63,29 @@ jobs:
       - name: Build signed release APK
         run: ./gradlew --no-daemon :app:assembleRelease
 
+      - name: Compute release metadata
+        id: release_meta
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          echo "short_sha=${SHORT_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "tag_name=${SHORT_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "apk_name=FelineGardener-${SHORT_SHA}.apk" >> "${GITHUB_OUTPUT}"
+
+      - name: Rename release APK
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk "app/build/outputs/apk/release/${{ steps.release_meta.outputs.apk_name }}"
+
       - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-apk
-          path: app/build/outputs/apk/release/app-release.apk
+          name: app-release-apk-${{ steps.release_meta.outputs.short_sha }}
+          path: app/build/outputs/apk/release/${{ steps.release_meta.outputs.apk_name }}
           if-no-files-found: error
 
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/release/app-release.apk
+          tag_name: ${{ steps.release_meta.outputs.tag_name }}
+          name: Release ${{ steps.release_meta.outputs.tag_name }}
+          files: app/build/outputs/apk/release/${{ steps.release_meta.outputs.apk_name }}
+          generate_release_notes: true

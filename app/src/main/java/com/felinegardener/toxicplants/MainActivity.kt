@@ -125,7 +125,7 @@ object AspcaPlantService {
                     )
                 }
             }
-            .distinctBy { plant -> plant.detailsUrl.lowercase() }
+            .distinctBy { plant -> "${plant.toxicityGroup}:${plant.name.lowercase()}" }
             .sortedWith(
                 compareBy<ToxicPlant> { plant ->
                     when (plant.toxicityGroup) {
@@ -159,15 +159,7 @@ fun filterPlants(plants: List<ToxicPlant>, query: String): List<ToxicPlant> {
 }
 
 fun splitPlantsByToxicity(plants: List<ToxicPlant>): Pair<List<ToxicPlant>, List<ToxicPlant>> {
-    val toxic = mutableListOf<ToxicPlant>()
-    val nonToxic = mutableListOf<ToxicPlant>()
-    plants.forEach { plant ->
-        when (plant.toxicityGroup) {
-            PlantToxicityGroup.TOXIC -> toxic += plant
-            PlantToxicityGroup.NON_TOXIC -> nonToxic += plant
-        }
-    }
-    return toxic to nonToxic
+    return plants.partition { it.toxicityGroup == PlantToxicityGroup.TOXIC }
 }
 
 class ToxicPlantsViewModel : ViewModel() {

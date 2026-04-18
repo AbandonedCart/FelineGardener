@@ -5,6 +5,12 @@ plugins {
 
 val keystorePassword = System.getenv("KEYSTORE_PASSWORD")
 val signingKeyAlias = System.getenv("KEY_ALIAS")
+val gitShortHash = System.getenv("GITHUB_SHA")?.take(7)
+    ?: runCatching {
+        providers.exec {
+            commandLine("git", "rev-parse", "--short=7", "HEAD")
+        }.standardOutput.asText.get().trim()
+    }.getOrDefault("local")
 val requiresReleaseSigning = gradle.startParameter.taskNames.any { taskName ->
     taskName.contains("release", ignoreCase = true) ||
         taskName.contains("publish", ignoreCase = true) ||
@@ -34,6 +40,7 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+        buildConfigField("String", "GIT_SHORT_HASH", "\"$gitShortHash\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -66,6 +73,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.14"

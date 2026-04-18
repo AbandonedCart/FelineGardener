@@ -214,8 +214,8 @@ object AspcaPlantService {
             .ifBlank { return null }
 
         val resolvedUri = runCatching { URI(resolved) }.getOrNull() ?: return null
-        val hasSupportedScheme = resolvedUri.scheme?.equals("http", ignoreCase = true) == true ||
-            resolvedUri.scheme?.equals("https", ignoreCase = true) == true
+        val supportedSchemes = setOf("http", "https")
+        val hasSupportedScheme = resolvedUri.scheme?.lowercase(Locale.US) in supportedSchemes
         if (!hasSupportedScheme || resolvedUri.host.isNullOrBlank()) {
             return null
         }
@@ -757,14 +757,21 @@ private fun PlantRow(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
     ) {
+        val displayImageUrl = imageUrl ?: ASPCA_LOGO_IMAGE_URL
+        val imageContentDescription = if (imageUrl.isNullOrBlank()) {
+            "ASPCA logo placeholder for ${plant.name}"
+        } else {
+            plant.name
+        }
+
         Row(
             modifier = Modifier.padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             AsyncImage(
-                model = imageUrl ?: ASPCA_LOGO_IMAGE_URL,
-                contentDescription = plant.name,
+                model = displayImageUrl,
+                contentDescription = imageContentDescription,
                 modifier = Modifier.size(88.dp),
                 contentScale = ContentScale.Crop
             )

@@ -98,7 +98,7 @@ class AspcaPlantServiceTest {
     }
 
     @Test
-    fun parsePlantDetailsFromHtml_preservesAspcaHttpImageUrl() {
+    fun parsePlantDetailsFromHtml_upgradesAspcaHttpImageUrlToHttps() {
         val html = """
             <html><head>
                 <meta property="og:image" content="http://www.aspca.org/sites/default/files/aspca-logo-square.png" />
@@ -107,7 +107,42 @@ class AspcaPlantServiceTest {
 
         val details = AspcaPlantService.parsePlantDetailsFromHtml(html)
 
-        assertEquals("http://www.aspca.org/sites/default/files/aspca-logo-square.png", details.imageUrl)
+        assertEquals("https://www.aspca.org/sites/default/files/aspca-logo-square.png", details.imageUrl)
+    }
+
+    @Test
+    fun parsePlantDetailsFromHtml_rejectsNonAspcaHttpImageUrl() {
+        val html = """
+            <html><head>
+                <meta property="og:image" content="http://images.example/rose.jpg" />
+            </head><body></body></html>
+        """.trimIndent()
+
+        val details = AspcaPlantService.parsePlantDetailsFromHtml(html)
+
+        assertEquals("https://www.aspca.org/sites/default/files/aspca-logo-square.png", details.imageUrl)
+    }
+
+    @Test
+    fun parsePlantListFromHtml_upgradesAspcaHttpDetailsUrlToHttps() {
+        val html = """
+            <html><body>
+                <div class="view-all-plants-list">
+                    <div class="view-header"><h2>Plants Toxic to Cats</h2></div>
+                    <div class="plant-entry">
+                        <a href="http://www.aspca.org/pet-care/aspca-poison-control/toxic-and-non-toxic-plants/lily">Lily</a>
+                    </div>
+                </div>
+            </body></html>
+        """.trimIndent()
+
+        val plants = AspcaPlantService.parsePlantListFromHtml(html)
+
+        assertEquals(1, plants.size)
+        assertEquals(
+            "https://www.aspca.org/pet-care/aspca-poison-control/toxic-and-non-toxic-plants/lily",
+            plants.first().detailsUrl
+        )
     }
 
     @Test

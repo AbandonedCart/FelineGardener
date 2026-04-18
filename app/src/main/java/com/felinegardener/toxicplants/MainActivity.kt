@@ -68,13 +68,16 @@ import java.util.Locale
 private const val ASPCA_CATS_LIST_URL = "https://www.aspca.org/pet-care/animal-poison-control/cats-plant-list"
 private const val ASPCA_PLANT_PATH_SEGMENT = "/toxic-and-non-toxic-plants/"
 private const val ASPCA_LOGO_IMAGE_URL = "https://www.aspca.org/sites/default/files/aspca-logo-square.png"
+private const val ASPCA_ROOT_HOST = "aspca.org"
+private const val HTTPS_SCHEME = "https"
+private const val HTTP_SCHEME = "http"
 private const val GITHUB_REPO_OWNER = "AbandonedCart"
 private const val GITHUB_REPO_NAME = "FelineGardener"
 private const val GITHUB_RELEASES_URL = "https://github.com/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases/latest"
 private const val GITHUB_LATEST_RELEASE_API_URL = "https://api.github.com/repos/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases/latest"
 private const val UPDATE_CACHE_DIR = "updates"
 private const val MAX_UPDATE_APK_FILENAME_LENGTH = 120
-private val SUPPORTED_IMAGE_SCHEMES = setOf("http", "https")
+private val SUPPORTED_IMAGE_SCHEMES = setOf(HTTP_SCHEME, HTTPS_SCHEME)
 private const val ASPCA_LAZYLOADER_PLACEHOLDER_PATH_SEGMENT = "/sites/all/modules/contrib/lazyloader/image_placeholder.gif"
 private val INVALID_FILENAME_CHARS = Regex("[^A-Za-z0-9._-]")
 private val CONSECUTIVE_UNDERSCORES = Regex("_+")
@@ -137,8 +140,8 @@ object AspcaPlantService {
         return plantLinks
             .mapNotNull { anchor ->
                 val name = anchor.text().trim()
-                val detailsUrl = anchor.absUrl("href").trim()
-                if (name.isBlank() || detailsUrl.isBlank() || detailsUrl == ASPCA_CATS_LIST_URL) {
+                val detailsUrl = normalizePlantDetailsUrl(anchor.absUrl("href"))
+                if (name.isBlank() || detailsUrl.isNullOrBlank() || detailsUrl == ASPCA_CATS_LIST_URL) {
                     null
                 } else {
                     val (primaryName, alternateNames) = parsePlantNameAndAlternateNames(name)
@@ -180,7 +183,9 @@ object AspcaPlantService {
     }
 
     suspend fun fetchPlantDetails(detailsUrl: String): PlantDetails = withContext(Dispatchers.IO) {
-        val document = Jsoup.connect(detailsUrl)
+        val normalizedDetailsUrl = normalizePlantDetailsUrl(detailsUrl)
+            ?: throw IllegalArgumentException("Invalid ASPCA details URL")
+        val document = Jsoup.connect(normalizedDetailsUrl)
             .userAgent("Mozilla/5.0 (Android)")
             .get()
 
@@ -238,11 +243,62 @@ object AspcaPlantService {
         if (!hasSupportedScheme || resolvedUri.host.isNullOrBlank()) {
             return null
         }
+        val normalizedImageUri = normalizeImageUri(resolvedUri) ?: return null
         if (resolvedUri.path?.contains(ASPCA_LAZYLOADER_PLACEHOLDER_PATH_SEGMENT, ignoreCase = true) == true) {
             return null
         }
 
-        return resolved
+        return normalizedImageUri.toString()
+    }
+
+    private fun normalizePlantDetailsUrl(rawUrl: String): String? {
+        val parsed = runCatching { URI(rawUrl.trim()) }.getOrNull() ?: return null
+        val host = parsed.host?.lowercase(Locale.US).orEmpty()
+        val scheme = parsed.scheme?.lowercase(Locale.US).orEmpty()
+        if (host.isBlank() || !isAspcaHost(host) || scheme !in SUPPORTED_IMAGE_SCHEMES) {
+            return null
+        }
+
+        val normalized = if (scheme == HTTP_SCHEME) {
+            parsed.withHttpsScheme()
+        } else {
+            parsed
+        }
+        return normalized.toString()
+    }
+
+    private fun normalizeImageUri(uri: URI): URI? {
+        val scheme = uri.scheme?.lowercase(Locale.US).orEmpty()
+        if (scheme == HTTPS_SCHEME) {
+            return uri
+        }
+        if (scheme != HTTP_SCHEME) {
+            return null
+        }
+
+        val host = uri.host?.lowercase(Locale.US).orEmpty()
+        return if (isAspcaHost(host)) {
+            uri.withHttpsScheme()
+        } else {
+            null
+        }
+    }
+
+    private fun isAspcaHost(host: String): Boolean {
+        return host == ASPCA_ROOT_HOST || host.endsWith(".$ASPCA_ROOT_HOST")
+    }
+
+    private fun URI.withHttpsScheme(): URI {
+        val sanitizedPort = if (port == 80) -1 else port
+        return URI(
+            HTTPS_SCHEME,
+            userInfo,
+            host,
+            sanitizedPort,
+            path,
+            query,
+            fragment
+        )
     }
 
     private fun parsePlantNameAndAlternateNames(rawName: String): Pair<String, List<String>> {

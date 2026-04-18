@@ -904,7 +904,12 @@ private fun PlantRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable {
-                CustomTabsIntent.Builder(customTabsSession).build()
+                val displayMetrics = context.resources.displayMetrics
+                val initialHeight = (displayMetrics.heightPixels * 0.6).toInt()
+                CustomTabsIntent.Builder(customTabsSession)
+                    .setInitialActivityHeightPx(initialHeight)
+                    .setToolbarCornerRadiusDp(16)
+                    .build()
                     .launchUrl(context, Uri.parse(plant.detailsUrl))
             },
         shape = RoundedCornerShape(16.dp),

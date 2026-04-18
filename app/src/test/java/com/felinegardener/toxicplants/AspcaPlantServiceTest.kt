@@ -170,4 +170,37 @@ class AspcaPlantServiceTest {
 
         assertEquals(PlantToxicityGroup.NON_TOXIC, selected)
     }
+
+    @Test
+    fun parseLatestReleaseFromJson_extractsApkAssetUrl() {
+        val json = """
+            {
+              "tag_name": "abc1234",
+              "html_url": "https://github.com/AbandonedCart/FelineGardener/releases/tag/abc1234",
+              "assets": [
+                { "name": "notes.txt", "browser_download_url": "https://example/notes.txt" },
+                { "name": "FelineGardener-abc1234.apk", "browser_download_url": "https://example/FelineGardener-abc1234.apk" }
+              ]
+            }
+        """.trimIndent()
+
+        val release = GitHubReleaseService.parseLatestReleaseFromJson(json)
+
+        assertEquals("abc1234", release?.tagName)
+        assertEquals("https://example/FelineGardener-abc1234.apk", release?.apkDownloadUrl)
+    }
+
+    @Test
+    fun parseLatestReleaseFromJson_returnsNullWhenTagMissing() {
+        val json = """
+            {
+              "html_url": "https://github.com/AbandonedCart/FelineGardener/releases/latest",
+              "assets": []
+            }
+        """.trimIndent()
+
+        val release = GitHubReleaseService.parseLatestReleaseFromJson(json)
+
+        assertEquals(null, release)
+    }
 }

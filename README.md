@@ -12,6 +12,7 @@ Android app for cat owners to browse ASPCA toxic plants.
 - Displays plant photos from ASPCA plant detail pages
 - Shows alternate plant names as card subtitles
 - Shows an in-app update banner when a newer GitHub Release is available
+- Approving the update banner downloads the latest APK and opens the installer
 - Tapping a plant opens the ASPCA detail page
 
 ## Release signing and publishing

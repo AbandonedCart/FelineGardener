@@ -28,6 +28,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -64,14 +66,21 @@ data class ToxicPlant(
     val name: String,
     val detailsUrl: String,
     val imageUrl: String?,
+    val alternateNames: List<String> = emptyList(),
     val toxicityGroup: PlantToxicityGroup = PlantToxicityGroup.TOXIC
+)
+
+data class PlantDetails(
+    val imageUrl: String? = null,
+    val alternateNames: List<String> = emptyList()
 )
 
 data class ToxicPlantsUiState(
     val query: String = "",
     val allPlants: List<ToxicPlant> = emptyList(),
     val filteredPlants: List<ToxicPlant> = emptyList(),
-    val imageOverrides: Map<String, String> = emptyMap(),
+    val selectedToxicityGroup: PlantToxicityGroup = PlantToxicityGroup.TOXIC,
+    val detailsOverrides: Map<String, PlantDetails> = emptyMap(),
     val isLoading: Boolean = true,
     val errorMessage: String? = null
 )
@@ -97,6 +106,7 @@ object AspcaPlantService {
                 if (name.isBlank() || detailsUrl.isBlank() || detailsUrl == ASPCA_CATS_LIST_URL) {
                     null
                 } else {
+                    val (primaryName, alternateNames) = parsePlantNameAndAlternateNames(name)
                     val sectionHeaderText = anchor.parents()
                         .firstOrNull { parent ->
                             parent.classNames().contains("view-all-plants-list")
@@ -110,17 +120,11 @@ object AspcaPlantService {
                     } else {
                         PlantToxicityGroup.TOXIC
                     }
-                    val imageUrl = anchor.parents()
-                        .flatMap { it.select("img").toList() }
-                        .firstNotNullOfOrNull { imageElement ->
-                            imageElement.absUrl("src").ifBlank {
-                                imageElement.absUrl("data-src")
-                            }.takeIf { it.isNotBlank() }
-                        }
                     ToxicPlant(
-                        name = name,
+                        name = primaryName,
                         detailsUrl = detailsUrl,
-                        imageUrl = imageUrl,
+                        imageUrl = null,
+                        alternateNames = alternateNames,
                         toxicityGroup = toxicityGroup
                     )
                 }
@@ -136,14 +140,85 @@ object AspcaPlantService {
             )
     }
 
-    suspend fun fetchPlantImage(detailsUrl: String): String? = withContext(Dispatchers.IO) {
+    fun parsePlantDetailsFromHtml(html: String, baseUri: String = "https://www.aspca.org"): PlantDetails {
+        return parsePlantDetails(Jsoup.parse(html, baseUri))
+    }
+
+    suspend fun fetchPlantDetails(detailsUrl: String): PlantDetails = withContext(Dispatchers.IO) {
         val document = Jsoup.connect(detailsUrl)
             .userAgent("Mozilla/5.0 (Android)")
             .get()
 
-        document.selectFirst("meta[property=og:image]")?.attr("content")?.takeIf { it.isNotBlank() }
+        parsePlantDetails(document)
+    }
+
+    private fun parsePlantDetails(document: Document): PlantDetails {
+        val imageUrl = document.selectFirst("meta[property=og:image]")?.attr("content")?.takeIf { it.isNotBlank() }
             ?: document.selectFirst("meta[name=twitter:image]")?.attr("content")?.takeIf { it.isNotBlank() }
             ?: document.select("img[src]").firstOrNull()?.absUrl("src")?.takeIf { it.isNotBlank() }
+
+        val alternateNames = parseAlternateNamesFromDetailDocument(document)
+        return PlantDetails(
+            imageUrl = imageUrl,
+            alternateNames = alternateNames
+        )
+    }
+
+    private fun parsePlantNameAndAlternateNames(rawName: String): Pair<String, List<String>> {
+        val trimmedName = rawName.trim()
+        val openParen = trimmedName.indexOf('(')
+        val closeParen = trimmedName.lastIndexOf(')')
+        if (openParen <= 0 || closeParen <= openParen) {
+            return trimmedName to emptyList()
+        }
+
+        val primaryName = trimmedName.substring(0, openParen).trim().ifBlank { trimmedName }
+        val alternatesSection = trimmedName.substring(openParen + 1, closeParen)
+        val alternates = splitAlternateNames(alternatesSection)
+        return primaryName to alternates
+    }
+
+    private fun parseAlternateNamesFromDetailDocument(document: Document): List<String> {
+        val candidateLabels = listOf(
+            "Additional Common Names",
+            "Common Names",
+            "Common Name",
+            "Alternate Names",
+            "Also Known As"
+        )
+
+        val fromDefinitionLists = document.select("dt").mapNotNull { term ->
+            val label = term.text().trim()
+            val matchesLabel = candidateLabels.any { it.equals(label, ignoreCase = true) }
+            if (matchesLabel) {
+                term.nextElementSibling()?.text()?.trim()
+            } else {
+                null
+            }
+        }
+
+        val fromLabelText = candidateLabels.flatMap { label ->
+            document.select(":matchesOwn(^\\s*${Regex.escape(label)}\\s*:?)")
+                .mapNotNull { element ->
+                    val sameElementText = element.ownText()
+                    val extracted = sameElementText
+                        .substringAfter(':', missingDelimiterValue = "")
+                        .trim()
+                        .ifBlank { null }
+                    extracted ?: element.nextElementSibling()?.text()?.trim()?.ifBlank { null }
+                }
+        }
+
+        return (fromDefinitionLists + fromLabelText)
+            .flatMap(::splitAlternateNames)
+            .distinctBy { it.lowercase() }
+    }
+
+    private fun splitAlternateNames(raw: String): List<String> {
+        return raw.split(',', ';', '/')
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinctBy { it.lowercase() }
     }
 }
 
@@ -154,12 +229,33 @@ fun filterPlants(plants: List<ToxicPlant>, query: String): List<ToxicPlant> {
     }
 
     return plants.filter { plant ->
-        plant.name.contains(trimmedQuery, ignoreCase = true)
+        plant.name.contains(trimmedQuery, ignoreCase = true) ||
+            plant.alternateNames.any { it.contains(trimmedQuery, ignoreCase = true) }
     }
 }
 
 fun splitPlantsByToxicity(plants: List<ToxicPlant>): Pair<List<ToxicPlant>, List<ToxicPlant>> {
     return plants.partition { it.toxicityGroup == PlantToxicityGroup.TOXIC }
+}
+
+fun selectToxicityGroupForFilteredPlants(
+    filteredPlants: List<ToxicPlant>,
+    currentSelection: PlantToxicityGroup
+): PlantToxicityGroup {
+    val (toxicPlants, nonToxicPlants) = splitPlantsByToxicity(filteredPlants)
+    val currentHasMatches = when (currentSelection) {
+        PlantToxicityGroup.TOXIC -> toxicPlants.isNotEmpty()
+        PlantToxicityGroup.NON_TOXIC -> nonToxicPlants.isNotEmpty()
+    }
+    if (currentHasMatches) {
+        return currentSelection
+    }
+
+    return when {
+        toxicPlants.isNotEmpty() -> PlantToxicityGroup.TOXIC
+        nonToxicPlants.isNotEmpty() -> PlantToxicityGroup.NON_TOXIC
+        else -> currentSelection
+    }
 }
 
 class ToxicPlantsViewModel : ViewModel() {
@@ -174,19 +270,31 @@ class ToxicPlantsViewModel : ViewModel() {
 
     fun onQueryChange(query: String) {
         val filtered = filterPlants(uiState.allPlants, query)
-        uiState = uiState.copy(query = query, filteredPlants = filtered)
+        uiState = uiState.copy(
+            query = query,
+            filteredPlants = filtered,
+            selectedToxicityGroup = selectToxicityGroupForFilteredPlants(
+                filteredPlants = filtered,
+                currentSelection = uiState.selectedToxicityGroup
+            )
+        )
     }
 
-    fun ensurePlantImage(detailsUrl: String) {
+    fun onToxicityGroupSelected(group: PlantToxicityGroup) {
+        uiState = uiState.copy(selectedToxicityGroup = group)
+    }
+
+    fun ensurePlantDetails(detailsUrl: String) {
         if (!imageRequests.add(detailsUrl)) {
             return
         }
 
         viewModelScope.launch {
-            val imageUrl = runCatching { AspcaPlantService.fetchPlantImage(detailsUrl) }.getOrNull()
-            if (!imageUrl.isNullOrBlank()) {
+            val details = runCatching { AspcaPlantService.fetchPlantDetails(detailsUrl) }
+                .getOrDefault(PlantDetails())
+            if (!details.imageUrl.isNullOrBlank() || details.alternateNames.isNotEmpty()) {
                 uiState = uiState.copy(
-                    imageOverrides = uiState.imageOverrides + (detailsUrl to imageUrl)
+                    detailsOverrides = uiState.detailsOverrides + (detailsUrl to details)
                 )
             }
         }
@@ -197,10 +305,15 @@ class ToxicPlantsViewModel : ViewModel() {
             uiState = uiState.copy(isLoading = true, errorMessage = null)
             runCatching { AspcaPlantService.fetchPlantList() }
                 .onSuccess { plants ->
+                    val filtered = filterPlants(plants, uiState.query)
                     uiState = uiState.copy(
                         isLoading = false,
                         allPlants = plants,
-                        filteredPlants = filterPlants(plants, uiState.query),
+                        filteredPlants = filtered,
+                        selectedToxicityGroup = selectToxicityGroupForFilteredPlants(
+                            filteredPlants = filtered,
+                            currentSelection = uiState.selectedToxicityGroup
+                        ),
                         errorMessage = null
                     )
                 }
@@ -275,45 +388,46 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
 
                 else -> {
                     val (toxicPlants, nonToxicPlants) = splitPlantsByToxicity(uiState.filteredPlants)
+                    val selectedTabIndex = when (uiState.selectedToxicityGroup) {
+                        PlantToxicityGroup.TOXIC -> 0
+                        PlantToxicityGroup.NON_TOXIC -> 1
+                    }
+                    val activePlants = when (uiState.selectedToxicityGroup) {
+                        PlantToxicityGroup.TOXIC -> toxicPlants
+                        PlantToxicityGroup.NON_TOXIC -> nonToxicPlants
+                    }
+
+                    TabRow(selectedTabIndex = selectedTabIndex) {
+                        Tab(
+                            selected = selectedTabIndex == 0,
+                            onClick = { viewModel.onToxicityGroupSelected(PlantToxicityGroup.TOXIC) },
+                            text = { Text("Toxic (${toxicPlants.size})") }
+                        )
+                        Tab(
+                            selected = selectedTabIndex == 1,
+                            onClick = { viewModel.onToxicityGroupSelected(PlantToxicityGroup.NON_TOXIC) },
+                            text = { Text("Non-Toxic (${nonToxicPlants.size})") }
+                        )
+                    }
+
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         contentPadding = PaddingValues(bottom = 20.dp)
                     ) {
-                        if (toxicPlants.isNotEmpty()) {
-                            item(key = "toxic-header") {
-                                GroupHeader(
-                                    text = "Plants Toxic to Cats",
-                                    count = toxicPlants.size
-                                )
-                            }
-                            items(toxicPlants, key = { it.detailsUrl }) { plant ->
-                                val imageUrl = uiState.imageOverrides[plant.detailsUrl] ?: plant.imageUrl
-                                PlantRow(
-                                    plant = plant,
-                                    imageUrl = imageUrl,
-                                    onNeedImage = { viewModel.ensurePlantImage(plant.detailsUrl) }
-                                )
-                            }
+                        items(activePlants, key = { it.detailsUrl }) { plant ->
+                            val detailsOverride = uiState.detailsOverrides[plant.detailsUrl]
+                            val imageUrl = detailsOverride?.imageUrl ?: plant.imageUrl
+                            val alternateNames = (plant.alternateNames + (detailsOverride?.alternateNames ?: emptyList()))
+                                .distinctBy { it.lowercase() }
+                            PlantRow(
+                                plant = plant,
+                                imageUrl = imageUrl,
+                                alternateNames = alternateNames,
+                                onNeedDetails = { viewModel.ensurePlantDetails(plant.detailsUrl) }
+                            )
                         }
 
-                        if (nonToxicPlants.isNotEmpty()) {
-                            item(key = "non-toxic-header") {
-                                GroupHeader(
-                                    text = "Plants Non-Toxic to Cats",
-                                    count = nonToxicPlants.size
-                                )
-                            }
-                            items(nonToxicPlants, key = { it.detailsUrl }) { plant ->
-                                val imageUrl = uiState.imageOverrides[plant.detailsUrl] ?: plant.imageUrl
-                                PlantRow(
-                                    plant = plant,
-                                    imageUrl = imageUrl,
-                                    onNeedImage = { viewModel.ensurePlantImage(plant.detailsUrl) }
-                                )
-                            }
-                        }
-
-                        if (uiState.filteredPlants.isEmpty()) {
+                        if (activePlants.isEmpty()) {
                             item(key = "empty-state") {
                                 Card(
                                     shape = RoundedCornerShape(16.dp),
@@ -322,7 +436,7 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
                                     )
                                 ) {
                                     Text(
-                                        text = "No plants found for your search.",
+                                        text = "No plants found in this section for your search.",
                                         style = MaterialTheme.typography.bodyMedium,
                                         modifier = Modifier.padding(16.dp)
                                     )
@@ -337,44 +451,16 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
 }
 
 @Composable
-private fun GroupHeader(text: String, count: Int) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-            modifier = Modifier.weight(1f)
-        )
-        Box(
-            modifier = Modifier
-                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
-                .padding(horizontal = 10.dp, vertical = 4.dp)
-        ) {
-            Text(
-                text = count.toString(),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-        }
-    }
-}
-
-@Composable
 private fun PlantRow(
     plant: ToxicPlant,
     imageUrl: String?,
-    onNeedImage: () -> Unit
+    alternateNames: List<String>,
+    onNeedDetails: () -> Unit
 ) {
     val context = LocalContext.current
 
-    LaunchedEffect(plant.detailsUrl, imageUrl) {
-        if (imageUrl.isNullOrBlank()) {
-            onNeedImage()
-        }
+    LaunchedEffect(plant.detailsUrl) {
+        onNeedDetails()
     }
 
     Card(
@@ -418,12 +504,23 @@ private fun PlantRow(
                 )
             }
 
-            Text(
-                text = plant.name,
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = plant.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (alternateNames.isNotEmpty()) {
+                    Text(
+                        text = alternateNames.joinToString(", "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
         }
     }
 }

@@ -214,8 +214,8 @@ object AspcaPlantService {
             .ifBlank { return null }
 
         val resolvedUri = runCatching { URI(resolved) }.getOrNull() ?: return null
-        val hasSupportedScheme = resolvedUri.scheme.equals("http", ignoreCase = true) ||
-            resolvedUri.scheme.equals("https", ignoreCase = true)
+        val hasSupportedScheme = resolvedUri.scheme?.equals("http", ignoreCase = true) == true ||
+            resolvedUri.scheme?.equals("https", ignoreCase = true) == true
         if (!hasSupportedScheme || resolvedUri.host.isNullOrBlank()) {
             return null
         }

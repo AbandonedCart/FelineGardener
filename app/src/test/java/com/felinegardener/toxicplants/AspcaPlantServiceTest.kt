@@ -104,6 +104,22 @@ class AspcaPlantServiceTest {
     }
 
     @Test
+    fun parsePlantDetailsFromHtml_preservesAspcaHttpsImageWithQueryParams() {
+        val html = """
+            <html><head>
+                <meta property="og:image" content="https://www.aspca.org/sites/default/files/styles/medium_image_300x200/public/field/image/plants/arum-r.jpg?itok=206UUxCJ" />
+            </head><body></body></html>
+        """.trimIndent()
+
+        val details = AspcaPlantService.parsePlantDetailsFromHtml(html)
+
+        assertEquals(
+            "https://www.aspca.org/sites/default/files/styles/medium_image_300x200/public/field/image/plants/arum-r.jpg?itok=206UUxCJ",
+            details.imageUrl
+        )
+    }
+
+    @Test
     fun parsePlantDetailsFromHtml_fallsBackToAspcaLogoWhenImageMissing() {
         val html = """
             <html><body>

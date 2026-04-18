@@ -185,7 +185,7 @@ object AspcaPlantService {
 
     suspend fun fetchPlantDetails(detailsUrl: String): PlantDetails = withContext(Dispatchers.IO) {
         val normalizedDetailsUrl = normalizePlantDetailsUrl(detailsUrl)
-            ?: throw IllegalArgumentException("Invalid ASPCA details URL")
+            ?: throw IllegalArgumentException("Invalid ASPCA details URL: $detailsUrl")
         val document = Jsoup.connect(normalizedDetailsUrl)
             .userAgent("Mozilla/5.0 (Android)")
             .get()

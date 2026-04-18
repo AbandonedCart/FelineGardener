@@ -78,6 +78,32 @@ class AspcaPlantServiceTest {
     }
 
     @Test
+    fun parsePlantDetailsFromHtml_upgradesAspcaHttpImageToHttps() {
+        val html = """
+            <html><head>
+                <meta property="og:image" content="http://www.aspca.org/sites/default/files/aspca-logo-square.png" />
+            </head><body></body></html>
+        """.trimIndent()
+
+        val details = AspcaPlantService.parsePlantDetailsFromHtml(html)
+
+        assertEquals("https://www.aspca.org/sites/default/files/aspca-logo-square.png", details.imageUrl)
+    }
+
+    @Test
+    fun parsePlantDetailsFromHtml_resolvesRelativeImagePathUsingBaseUri() {
+        val html = """
+            <html><body>
+                <img src="/sites/default/files/example.png" />
+            </body></html>
+        """.trimIndent()
+
+        val details = AspcaPlantService.parsePlantDetailsFromHtml(html)
+
+        assertEquals("https://www.aspca.org/sites/default/files/example.png", details.imageUrl)
+    }
+
+    @Test
     fun filterPlants_matchesCaseInsensitiveSubstringsInPrimaryAndAlternateNames() {
         val plants = listOf(
             ToxicPlant(

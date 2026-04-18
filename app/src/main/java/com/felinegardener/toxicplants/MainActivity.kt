@@ -53,6 +53,7 @@ import org.json.JSONObject
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.net.HttpURLConnection
+import java.net.URI
 import java.net.URL
 
 private const val ASPCA_CATS_LIST_URL = "https://www.aspca.org/pet-care/animal-poison-control/cats-plant-list"
@@ -164,15 +165,61 @@ object AspcaPlantService {
     }
 
     private fun parsePlantDetails(document: Document): PlantDetails {
-        val imageUrl = document.selectFirst("meta[property=og:image]")?.attr("content")?.takeIf { it.isNotBlank() }
-            ?: document.selectFirst("meta[name=twitter:image]")?.attr("content")?.takeIf { it.isNotBlank() }
-            ?: document.select("img[src]").firstOrNull()?.absUrl("src")?.takeIf { it.isNotBlank() }
+        val imageUrl = resolveImageUrl(
+            document = document,
+            rawValue = document.selectFirst("meta[property=og:image]")?.attr("content")
+        )
+            ?: resolveImageUrl(
+                document = document,
+                rawValue = document.selectFirst("meta[name=twitter:image]")?.attr("content")
+            )
+            ?: resolveImageUrl(
+                document = document,
+                rawValue = document.select("img[src]").firstOrNull()?.attr("src")
+            )
 
         val alternateNames = parseAlternateNamesFromDetailDocument(document)
         return PlantDetails(
             imageUrl = imageUrl,
             alternateNames = alternateNames
         )
+    }
+
+    private fun resolveImageUrl(document: Document, rawValue: String?): String? {
+        val trimmed = rawValue?.trim().orEmpty()
+        if (trimmed.isBlank()) {
+            return null
+        }
+
+        val baseUrl = document.baseUri().ifBlank { "https://www.aspca.org" }
+        val resolved = runCatching { URL(URL(baseUrl), trimmed).toString() }
+            .getOrElse { trimmed }
+            .trim()
+            .ifBlank { return null }
+
+        return normalizeAspcaImageUrl(resolved)
+    }
+
+    private fun normalizeAspcaImageUrl(url: String): String {
+        val uri = runCatching { URI(url) }.getOrElse { return url }
+        val host = uri.host?.lowercase() ?: return url
+        val isAspcaHost = host == "aspca.org" || host == "www.aspca.org"
+        val isHttp = uri.scheme.equals("http", ignoreCase = true)
+        if (!isAspcaHost || !isHttp) {
+            return url
+        }
+
+        return runCatching {
+            URI(
+                "https",
+                uri.userInfo,
+                uri.host,
+                uri.port,
+                uri.path,
+                uri.query,
+                uri.fragment
+            ).toString()
+        }.getOrElse { url }
     }
 
     private fun parsePlantNameAndAlternateNames(rawName: String): Pair<String, List<String>> {

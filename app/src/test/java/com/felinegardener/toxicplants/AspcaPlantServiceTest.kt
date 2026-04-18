@@ -124,6 +124,19 @@ class AspcaPlantServiceTest {
     }
 
     @Test
+    fun parsePlantDetailsFromHtml_acceptsNonAspcaHttpsImageUrl() {
+        val html = """
+            <html><head>
+                <meta property="og:image" content="https://images.example/rose.jpg" />
+            </head><body></body></html>
+        """.trimIndent()
+
+        val details = AspcaPlantService.parsePlantDetailsFromHtml(html)
+
+        assertEquals("https://images.example/rose.jpg", details.imageUrl)
+    }
+
+    @Test
     fun parsePlantListFromHtml_upgradesAspcaHttpDetailsUrlToHttps() {
         val html = """
             <html><body>

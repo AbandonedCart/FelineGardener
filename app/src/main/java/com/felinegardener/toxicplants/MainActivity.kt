@@ -77,7 +77,7 @@ private const val GITHUB_RELEASES_URL = "https://github.com/$GITHUB_REPO_OWNER/$
 private const val GITHUB_LATEST_RELEASE_API_URL = "https://api.github.com/repos/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases/latest"
 private const val UPDATE_CACHE_DIR = "updates"
 private const val MAX_UPDATE_APK_FILENAME_LENGTH = 120
-private val SUPPORTED_IMAGE_SCHEMES = setOf(HTTP_SCHEME, HTTPS_SCHEME)
+private val SUPPORTED_URL_SCHEMES = setOf(HTTP_SCHEME, HTTPS_SCHEME)
 private const val ASPCA_LAZYLOADER_PLACEHOLDER_PATH_SEGMENT = "/sites/all/modules/contrib/lazyloader/image_placeholder.gif"
 private val INVALID_FILENAME_CHARS = Regex("[^A-Za-z0-9._-]")
 private val CONSECUTIVE_UNDERSCORES = Regex("_+")
@@ -239,12 +239,12 @@ object AspcaPlantService {
             .ifBlank { return null }
 
         val resolvedUri = runCatching { URI(resolved) }.getOrNull() ?: return null
-        val hasSupportedScheme = resolvedUri.scheme?.lowercase(Locale.US) in SUPPORTED_IMAGE_SCHEMES
+        val hasSupportedScheme = resolvedUri.scheme?.lowercase(Locale.US) in SUPPORTED_URL_SCHEMES
         if (!hasSupportedScheme || resolvedUri.host.isNullOrBlank()) {
             return null
         }
         val normalizedImageUri = normalizeImageUri(resolvedUri) ?: return null
-        if (resolvedUri.path?.contains(ASPCA_LAZYLOADER_PLACEHOLDER_PATH_SEGMENT, ignoreCase = true) == true) {
+        if (normalizedImageUri.path?.contains(ASPCA_LAZYLOADER_PLACEHOLDER_PATH_SEGMENT, ignoreCase = true) == true) {
             return null
         }
 
@@ -255,7 +255,7 @@ object AspcaPlantService {
         val parsed = runCatching { URI(rawUrl.trim()) }.getOrNull() ?: return null
         val host = parsed.host?.lowercase(Locale.US).orEmpty()
         val scheme = parsed.scheme?.lowercase(Locale.US).orEmpty()
-        if (host.isBlank() || !isAspcaHost(host) || scheme !in SUPPORTED_IMAGE_SCHEMES) {
+        if (host.isBlank() || !isAspcaHost(host) || scheme !in SUPPORTED_URL_SCHEMES) {
             return null
         }
 

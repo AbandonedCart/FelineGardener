@@ -78,6 +78,26 @@ class AspcaPlantServiceTest {
     }
 
     @Test
+    fun parsePlantDetailsFromHtml_prefersAspcaPlantImageFieldOverOgLogo() {
+        val html = """
+            <html><head>
+                <meta property="og:image" content="http://www.aspca.org/sites/default/files/aspca-logo-square.png" />
+            </head><body>
+                <div class="field-name-field-image">
+                    <img data-echo="https://www.aspca.org/sites/default/files/styles/medium_image_300x200/public/field/image/plants/aloe_vera_aloe-300x200.jpg?itok=zSlTYKxN" />
+                </div>
+            </body></html>
+        """.trimIndent()
+
+        val details = AspcaPlantService.parsePlantDetailsFromHtml(html)
+
+        assertEquals(
+            "https://www.aspca.org/sites/default/files/styles/medium_image_300x200/public/field/image/plants/aloe_vera_aloe-300x200.jpg?itok=zSlTYKxN",
+            details.imageUrl
+        )
+    }
+
+    @Test
     fun parsePlantDetailsFromHtml_preservesAspcaHttpImageUrl() {
         val html = """
             <html><head>
@@ -138,6 +158,21 @@ class AspcaPlantServiceTest {
             <html><head>
                 <meta property="og:image" content="javascript:alert('xss')" />
             </head><body></body></html>
+        """.trimIndent()
+
+        val details = AspcaPlantService.parsePlantDetailsFromHtml(html)
+
+        assertEquals("https://www.aspca.org/sites/default/files/aspca-logo-square.png", details.imageUrl)
+    }
+
+    @Test
+    fun parsePlantDetailsFromHtml_ignoresLazyloaderPlaceholderImage() {
+        val html = """
+            <html><body>
+                <div class="field-name-field-image">
+                    <img src="https://www.aspca.org/sites/all/modules/contrib/lazyloader/image_placeholder.gif" />
+                </div>
+            </body></html>
         """.trimIndent()
 
         val details = AspcaPlantService.parsePlantDetailsFromHtml(html)

@@ -4,6 +4,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+private const val DEFAULT_ASPCA_LOGO_URL = "https://www.aspca.org/sites/default/files/aspca-logo-square.png"
+
 class AspcaPlantServiceTest {
     @Test
     fun parsePlantListFromHtml_extractsPlantEntriesAndSplitsToxicityGroups() {
@@ -107,7 +109,7 @@ class AspcaPlantServiceTest {
 
         val details = AspcaPlantService.parsePlantDetailsFromHtml(html)
 
-        assertEquals("https://www.aspca.org/sites/default/files/aspca-logo-square.png", details.imageUrl)
+        assertEquals(DEFAULT_ASPCA_LOGO_URL, details.imageUrl)
     }
 
     @Test
@@ -120,7 +122,7 @@ class AspcaPlantServiceTest {
 
         val details = AspcaPlantService.parsePlantDetailsFromHtml(html)
 
-        assertEquals("https://www.aspca.org/sites/default/files/aspca-logo-square.png", details.imageUrl)
+        assertEquals(DEFAULT_ASPCA_LOGO_URL, details.imageUrl)
     }
 
     @Test
@@ -197,7 +199,7 @@ class AspcaPlantServiceTest {
 
         val details = AspcaPlantService.parsePlantDetailsFromHtml(html)
 
-        assertEquals("https://www.aspca.org/sites/default/files/aspca-logo-square.png", details.imageUrl)
+        assertEquals(DEFAULT_ASPCA_LOGO_URL, details.imageUrl)
     }
 
     @Test
@@ -210,7 +212,7 @@ class AspcaPlantServiceTest {
 
         val details = AspcaPlantService.parsePlantDetailsFromHtml(html)
 
-        assertEquals("https://www.aspca.org/sites/default/files/aspca-logo-square.png", details.imageUrl)
+        assertEquals(DEFAULT_ASPCA_LOGO_URL, details.imageUrl)
     }
 
     @Test

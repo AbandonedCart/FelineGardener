@@ -105,7 +105,7 @@ private const val HTTP_SCHEME = "http"
 private const val GITHUB_REPO_OWNER = "AbandonedCart"
 private const val GITHUB_REPO_NAME = "FelineGardener"
 private const val GITHUB_REPO_URL = "https://github.com/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME"
-private const val GITHUB_RELEASES_URL = "https://github.com/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases/latest"
+private const val GITHUB_RELEASES_URL = "$GITHUB_REPO_URL/releases/latest"
 private const val GITHUB_LATEST_RELEASE_API_URL = "https://api.github.com/repos/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases/latest"
 private const val UPDATE_CACHE_DIR = "updates"
 private const val MAX_UPDATE_APK_FILENAME_LENGTH = 120
@@ -888,7 +888,7 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = stringResource(R.string.banner_dialog_hash, BuildConfig.GIT_SHORT_HASH),
+                        text = stringResource(R.string.banner_dialog_git_hash_format, BuildConfig.GIT_SHORT_HASH),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center

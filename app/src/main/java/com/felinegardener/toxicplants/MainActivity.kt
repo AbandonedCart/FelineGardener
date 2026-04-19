@@ -888,7 +888,7 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = stringResource(R.string.banner_dialog_git_hash_format, BuildConfig.GIT_SHORT_HASH),
+                        text = stringResource(R.string.banner_dialog_git_hash, BuildConfig.GIT_SHORT_HASH),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center

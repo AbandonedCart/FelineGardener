@@ -17,6 +17,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.browser.customtabs.CustomTabsClient
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.browser.customtabs.CustomTabsService
 import androidx.browser.customtabs.CustomTabsServiceConnection
 import androidx.browser.customtabs.CustomTabsSession
 import androidx.compose.foundation.Image
@@ -96,7 +97,8 @@ import java.util.Locale
 import kotlin.random.Random
 import androidx.core.net.toUri
 
-private const val ASPCA_CATS_LIST_URL = "https://www.aspca.org/pet-care/animal-poison-control/cats-plant-list"
+private const val ASPCA_BASE_URL = "https://www.aspca.org"
+private const val ASPCA_CATS_LIST_URL = "$ASPCA_BASE_URL/pet-care/animal-poison-control/cats-plant-list"
 private const val ASPCA_PLANT_PATH_SEGMENT = "/toxic-and-non-toxic-plants/"
 private const val ASPCA_LOGO_IMAGE_URL = "https://www.aspca.org/sites/default/files/aspca-logo-square.png"
 private const val ASPCA_ROOT_HOST = "aspca.org"
@@ -164,7 +166,7 @@ object AspcaPlantService {
         parsePlantList(document)
     }
 
-    fun parsePlantListFromHtml(html: String, baseUri: String = "https://www.aspca.org"): List<ToxicPlant> {
+    fun parsePlantListFromHtml(html: String, baseUri: String = ASPCA_BASE_URL): List<ToxicPlant> {
         return parsePlantList(Jsoup.parse(html, baseUri))
     }
 
@@ -211,7 +213,7 @@ object AspcaPlantService {
             )
     }
 
-    fun parsePlantDetailsFromHtml(html: String, baseUri: String = "https://www.aspca.org"): PlantDetails {
+    fun parsePlantDetailsFromHtml(html: String, baseUri: String = ASPCA_BASE_URL): PlantDetails {
         return parsePlantDetails(Jsoup.parse(html, baseUri))
     }
 
@@ -592,7 +594,13 @@ class MainActivity : ComponentActivity() {
         override fun onCustomTabsServiceConnected(name: ComponentName, client: CustomTabsClient) {
             customTabsClient = client.apply { warmup(0) }
             customTabsSession = client.newSession(null)?.also { session ->
-                session.mayLaunchUrl(ASPCA_CATS_LIST_URL.toUri(), null, null)
+                val otherLikelyBundles = listOf(
+                    Bundle().apply {
+                        putParcelable(CustomTabsService.KEY_URL, ASPCA_BASE_URL.toUri())
+                        putParcelable(CustomTabsService.KEY_URL, GITHUB_REPO_URL.toUri())
+                    }
+                )
+                session.mayLaunchUrl(ASPCA_CATS_LIST_URL.toUri(), null, otherLikelyBundles)
             }
         }
 
@@ -918,12 +926,13 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
 
                     Button(
                         onClick = {
-                            context.startActivity(
-                                Intent(
-                                    Intent.ACTION_VIEW,
-                                    GITHUB_REPO_URL.toUri()
-                                )
-                            )
+                            val displayMetrics = context.resources.displayMetrics
+                            val initialHeight = (displayMetrics.heightPixels * 0.6).toInt()
+                            CustomTabsIntent.Builder(customTabsSession)
+                                .setInitialActivityHeightPx(initialHeight)
+                                .setToolbarCornerRadiusDp(16)
+                                .build()
+                                .launchUrl(context, GITHUB_REPO_URL.toUri())
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -934,12 +943,13 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
 
                     Button(
                         onClick = {
-                            context.startActivity(
-                                Intent(
-                                    Intent.ACTION_VIEW,
-                                    "https://www.aspca.org/about-us/linking-policy".toUri()
-                                )
-                            )
+                            val displayMetrics = context.resources.displayMetrics
+                            val initialHeight = (displayMetrics.heightPixels * 0.6).toInt()
+                            CustomTabsIntent.Builder(customTabsSession)
+                                .setInitialActivityHeightPx(initialHeight)
+                                .setToolbarCornerRadiusDp(16)
+                                .build()
+                                .launchUrl(context, "https://www.aspca.org/about-us/linking-policy".toUri())
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {

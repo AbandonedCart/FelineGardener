@@ -1,7 +1,10 @@
 <resources>
     <string name="app_name">Feline Gardener</string>
     <string name="app_icon_content_description">Feline Gardener app icon</string>
-    <string name="banner_dialog_title">About Feline Gardener</string>
+    <string name="banner_dialog_title">Feline Gardener</string>
+    <string name="banner_dialog_hash">%1$s</string>
+    <string name="banner_dialog_disclaimer">This app is not affiliated with or endorsed by the ASPCA. All content is provided for education purposes only.\n\nhttps://www.aspca.org/about-us/linking-policy</string>
     <string name="banner_dialog_image_description">ChatGPT and Claude banner</string>
-    <string name="banner_dialog_close">Close</string>
+    <string name="banner_dialog_view_github">View on GitHub</string>
+    <string name="banner_dialog_close_icon_description">Close</string>
 </resources>

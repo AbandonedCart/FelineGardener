@@ -663,7 +663,6 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
                             painter = painterResource(id = R.mipmap.ic_launcher_foreground),
                             contentDescription = "Show ChatGPT and Claude banner",
                             modifier = Modifier
-                                .padding(end = 12.dp)
                                 .size(36.dp)
                         )
                     }
@@ -850,7 +849,7 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
                     painter = painterResource(id = R.drawable.chatgpt_claude_banner),
                     contentDescription = "ChatGPT and Claude banner",
                     modifier = Modifier.fillMaxWidth(),
-                    contentScale = ContentScale.FillWidth
+                    contentScale = ContentScale.Fit
                 )
             },
             confirmButton = {

@@ -18,6 +18,7 @@ import androidx.browser.customtabs.CustomTabsClient
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.browser.customtabs.CustomTabsServiceConnection
 import androidx.browser.customtabs.CustomTabsSession
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,6 +44,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -54,6 +56,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
@@ -424,15 +428,22 @@ object GitHubReleaseService {
     }
 }
 
-fun filterPlants(plants: List<ToxicPlant>, query: String): List<ToxicPlant> {
+fun filterPlants(
+    plants: List<ToxicPlant>,
+    query: String,
+    detailsOverrides: Map<String, PlantDetails> = emptyMap()
+): List<ToxicPlant> {
     val trimmedQuery = query.trim()
     if (trimmedQuery.isEmpty()) {
         return plants
     }
 
     return plants.filter { plant ->
+        val details = detailsOverrides[plant.detailsUrl]
+        val allAlternates = (plant.alternateNames + (details?.alternateNames ?: emptyList()))
+            .distinctBy { it.lowercase() }
         plant.name.contains(trimmedQuery, ignoreCase = true) ||
-            plant.alternateNames.any { it.contains(trimmedQuery, ignoreCase = true) }
+            allAlternates.any { it.contains(trimmedQuery, ignoreCase = true) }
     }
 }
 
@@ -472,7 +483,7 @@ class ToxicPlantsViewModel : ViewModel() {
     }
 
     fun onQueryChange(query: String) {
-        val filtered = filterPlants(uiState.allPlants, query)
+        val filtered = filterPlants(uiState.allPlants, query, uiState.detailsOverrides)
         uiState = uiState.copy(
             query = query,
             filteredPlants = filtered,
@@ -496,8 +507,14 @@ class ToxicPlantsViewModel : ViewModel() {
             val details = runCatching { AspcaPlantService.fetchPlantDetails(detailsUrl) }
                 .getOrDefault(PlantDetails())
             if (!details.imageUrl.isNullOrBlank() || details.alternateNames.isNotEmpty()) {
+                val newOverrides = uiState.detailsOverrides + (detailsUrl to details)
                 uiState = uiState.copy(
-                    detailsOverrides = uiState.detailsOverrides + (detailsUrl to details)
+                    detailsOverrides = newOverrides,
+                    filteredPlants = if (uiState.query.isNotBlank()) {
+                        filterPlants(uiState.allPlants, uiState.query, newOverrides)
+                    } else {
+                        uiState.filteredPlants
+                    }
                 )
             }
         }
@@ -527,7 +544,7 @@ class ToxicPlantsViewModel : ViewModel() {
             uiState = uiState.copy(isLoading = true, errorMessage = null)
             runCatching { AspcaPlantService.fetchPlantList() }
                 .onSuccess { plants ->
-                    val filtered = filterPlants(plants, uiState.query)
+                    val filtered = filterPlants(plants, uiState.query, uiState.detailsOverrides)
                     uiState = uiState.copy(
                         isLoading = false,
                         allPlants = plants,
@@ -613,7 +630,22 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
     val customTabsSession = (context as? MainActivity)?.customTabsSession
     var isUpdateDialogVisible by remember { mutableStateOf(false) }
 
-    Scaffold { innerPadding ->
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.app_name)) },
+                actions = {
+                    Image(
+                        painter = painterResource(id = R.mipmap.ic_launcher_foreground),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .padding(end = 12.dp)
+                            .size(36.dp)
+                    )
+                }
+            )
+        }
+    ) { innerPadding ->
         Column(
             modifier = Modifier
                 .padding(innerPadding)

@@ -10,6 +10,7 @@ jsoup = "1.17.2"
 coil = "2.7.0"
 browser = "1.8.0"
 junit4 = "4.13.2"
+material = "1.12.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -26,6 +27,7 @@ jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
 junit4 = { group = "junit", name = "junit", version.ref = "junit4" }
+material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

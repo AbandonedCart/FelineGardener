@@ -1,13 +1,20 @@
 name: Android Build and Publish
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
+    paths-ignore:
+      - '**/README.md'
+      - '.github/ISSUE_TEMPLATE/**'
+      - 'assets/**'
 
 permissions:
   contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-publish-release:

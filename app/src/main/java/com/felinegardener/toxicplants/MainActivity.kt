@@ -47,6 +47,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,17 +57,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -476,6 +481,7 @@ class ToxicPlantsViewModel : ViewModel() {
         private set
 
     private val imageRequests = mutableSetOf<String>()
+    private var updateCheckJob: Job? = null
 
     init {
         loadPlants()
@@ -520,9 +526,9 @@ class ToxicPlantsViewModel : ViewModel() {
         }
     }
 
-    private fun checkForUpdates() {
-        if (BuildConfig.GOOGLE_PLAY) return
-        viewModelScope.launch {
+    fun checkForUpdates() {
+        if (BuildConfig.GOOGLE_PLAY || updateCheckJob?.isActive == true) return
+        updateCheckJob = viewModelScope.launch {
             val latestRelease = runCatching { GitHubReleaseService.fetchLatestRelease() }.getOrNull() ?: return@launch
             val currentHash = BuildConfig.GIT_SHORT_HASH.trim()
             val isUpdateAvailable = normalizeReleaseTag(latestRelease.tagName) != normalizeReleaseTag(currentHash)
@@ -629,6 +635,19 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
     val coroutineScope = rememberCoroutineScope()
     val customTabsSession = (context as? MainActivity)?.customTabsSession
     var isUpdateDialogVisible by remember { mutableStateOf(false) }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.checkForUpdates()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     Scaffold(
         topBar = {

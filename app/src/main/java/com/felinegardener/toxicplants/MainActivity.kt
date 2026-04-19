@@ -597,6 +597,8 @@ class MainActivity : ComponentActivity() {
                 val otherLikelyBundles = listOf(
                     Bundle().apply {
                         putParcelable(CustomTabsService.KEY_URL, ASPCA_BASE_URL.toUri())
+                    },
+                    Bundle().apply {
                         putParcelable(CustomTabsService.KEY_URL, GITHUB_REPO_URL.toUri())
                     }
                 )

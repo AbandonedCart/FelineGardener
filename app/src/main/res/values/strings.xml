@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">Feline Gardener</string>
+    <string name="app_icon_content_description">Feline Gardener app icon</string>
+    <string name="banner_dialog_title">ChatGPT + Claude</string>
+    <string name="banner_dialog_image_description">ChatGPT and Claude banner</string>
+    <string name="banner_dialog_close">Close</string>
 </resources>

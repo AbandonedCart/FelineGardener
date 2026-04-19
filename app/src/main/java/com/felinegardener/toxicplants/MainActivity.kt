@@ -658,10 +658,13 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
             TopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
                 actions = {
-                    IconButton(onClick = { isBannerDialogVisible = true }) {
+                    IconButton(
+                        onClick = { isBannerDialogVisible = true },
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
                         Image(
                             painter = painterResource(id = R.mipmap.ic_launcher_foreground),
-                            contentDescription = "Feline Gardener app icon",
+                            contentDescription = stringResource(R.string.app_icon_content_description),
                             modifier = Modifier
                                 .size(36.dp)
                         )
@@ -843,18 +846,18 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
     if (isBannerDialogVisible) {
         AlertDialog(
             onDismissRequest = { isBannerDialogVisible = false },
-            title = { Text("ChatGPT + Claude") },
+            title = { Text(stringResource(R.string.banner_dialog_title)) },
             text = {
                 Image(
                     painter = painterResource(id = R.drawable.chatgpt_claude_banner),
-                    contentDescription = "ChatGPT and Claude banner",
+                    contentDescription = stringResource(R.string.banner_dialog_image_description),
                     modifier = Modifier.fillMaxWidth(),
                     contentScale = ContentScale.Fit
                 )
             },
             confirmButton = {
                 TextButton(onClick = { isBannerDialogVisible = false }) {
-                    Text("Close")
+                    Text(stringResource(R.string.banner_dialog_close))
                 }
             }
         )

@@ -229,7 +229,7 @@ object AspcaPlantService {
         val imageUrl = resolveImageUrl(
             document = document,
             rawValue = document.selectFirst(".field-name-field-image img[data-echo]")?.attr("data-echo")
-        }
+        )
             ?: resolveImageUrl(
                 document = document,
                 rawValue = document.selectFirst(".field-name-field-image noscript img[src]")?.attr("src")
@@ -888,7 +888,10 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = stringResource(R.string.banner_dialog_git_hash, BuildConfig.GIT_SHORT_HASH),
+                        text = stringResource(
+                            R.string.banner_dialog_git_hash,
+                            BuildConfig.GIT_SHORT_HASH
+                        ),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
@@ -915,15 +918,36 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
 
                     Button(
                         onClick = {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, GITHUB_REPO_URL.toUri()))
+                            context.startActivity(
+                                Intent(
+                                    Intent.ACTION_VIEW,
+                                    GITHUB_REPO_URL.toUri()
+                                )
+                            )
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(stringResource(R.string.banner_dialog_view_github))
                     }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = {
+                            context.startActivity(
+                                Intent(
+                                    Intent.ACTION_VIEW,
+                                    "https://www.aspca.org/about-us/linking-policy".toUri()
+                                )
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.banner_dialog_link_policy))
+                    }
                 }
             }
-        )
+        }
     }
 }
 

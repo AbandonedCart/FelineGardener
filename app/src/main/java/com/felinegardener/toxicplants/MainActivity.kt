@@ -229,7 +229,7 @@ object AspcaPlantService {
         val imageUrl = resolveImageUrl(
             document = document,
             rawValue = document.selectFirst(".field-name-field-image img[data-echo]")?.attr("data-echo")
-        )
+        }
             ?: resolveImageUrl(
                 document = document,
                 rawValue = document.selectFirst(".field-name-field-image noscript img[src]")?.attr("src")

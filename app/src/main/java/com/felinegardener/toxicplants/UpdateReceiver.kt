@@ -32,11 +32,7 @@ class UpdateReceiver : BroadcastReceiver() {
                     // We allow all standard components because this intent is provided by the
                     // system PackageInstaller to initiate the user-facing install dialog.
                     val sanitizedIntent = IntentSanitizer.Builder()
-                        .allowAnyAction()
-                        .allowAnyCategory()
-                        .allowAnyData()
-                        .allowAnyExtras()
-                        .allowAnyFlags()
+                        .allowAnyComponent()
                         .build()
                         .sanitizeByFiltering(userIntent)
 

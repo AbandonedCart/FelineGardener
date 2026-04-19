@@ -21,8 +21,8 @@ Android app for cat owners to search ASPCA (non)toxic plant information.
 - GitHub Actions workflow:
   - `.github/workflows/android-release.yml`
 - Release publication:
-  - On `main` pushes (and manual dispatch), publishes a GitHub Release tagged with the short GitHub commit hash
-  - Release APK filename format uses the actual short hash value, e.g. `FelineGardener-abc1234.apk`
+  - On `main` pushes, publishes a GitHub Release tagged with the short GitHub commit hash
+  - Release APK filename format uses the short hash value, e.g. `FelineGardener-abc1234.apk`
 - Configure repository secrets used by the workflow:
   - `KEYSTORE_PASSWORD`
   - `KEY_ALIAS`

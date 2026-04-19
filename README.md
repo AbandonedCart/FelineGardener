@@ -1,6 +1,6 @@
-# FelineGardener
+# Feline Gardener
 
-Android app for cat owners to browse ASPCA toxic plants.
+Android app for cat owners to search ASPCA (non)toxic plant information.
 
 ## Features
 - Downloads the ASPCA cats toxic plant list from:
@@ -11,9 +11,9 @@ Android app for cat owners to browse ASPCA toxic plants.
 - Shows a searchable list across both groups
 - Displays plant photos from ASPCA plant detail pages
 - Shows alternate plant names as card subtitles
-- Shows an in-app update banner when a newer GitHub Release is available
-- Approving the update banner downloads the latest APK and opens the installer
 - Tapping a plant opens the ASPCA detail page
+- Shows an in-app update banner when a newer Release is available
+- Tapping the update banner downloads and installs the latest APK
 
 ## Release signing and publishing
 - Release keystore is committed at:
@@ -27,5 +27,7 @@ Android app for cat owners to browse ASPCA toxic plants.
   - `KEYSTORE_PASSWORD`
   - `KEY_ALIAS`
 
-## Screenshot
-![App screenshot](https://github.com/user-attachments/assets/ab189812-3608-41e5-9215-61e5296830af)
+## Disclaimer
+This app is not affiliated with or endorsed by the ASPCA. All content is provided for education purposes only.
+
+https://www.aspca.org/about-us/linking-policy

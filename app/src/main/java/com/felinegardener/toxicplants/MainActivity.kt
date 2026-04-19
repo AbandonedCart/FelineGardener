@@ -38,6 +38,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -637,6 +638,7 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
     val coroutineScope = rememberCoroutineScope()
     val customTabsSession = (context as? MainActivity)?.customTabsSession
     var isUpdateDialogVisible by remember { mutableStateOf(false) }
+    var isBannerDialogVisible by remember { mutableStateOf(false) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -656,13 +658,17 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
             TopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
                 actions = {
-                    Image(
-                        painter = painterResource(id = R.mipmap.ic_launcher_foreground),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .padding(end = 12.dp)
-                            .size(36.dp)
-                    )
+                    IconButton(
+                        onClick = { isBannerDialogVisible = true },
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.mipmap.ic_launcher_foreground),
+                            contentDescription = stringResource(R.string.app_icon_content_description),
+                            modifier = Modifier
+                                .size(36.dp)
+                        )
+                    }
                 }
             )
         }
@@ -835,6 +841,26 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
                 }
             }
         }
+    }
+
+    if (isBannerDialogVisible) {
+        AlertDialog(
+            onDismissRequest = { isBannerDialogVisible = false },
+            title = { Text(stringResource(R.string.banner_dialog_title)) },
+            text = {
+                Image(
+                    painter = painterResource(id = R.drawable.chatgpt_claude_banner),
+                    contentDescription = stringResource(R.string.banner_dialog_image_description),
+                    modifier = Modifier.fillMaxWidth(),
+                    contentScale = ContentScale.Fit
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { isBannerDialogVisible = false }) {
+                    Text(stringResource(R.string.banner_dialog_close))
+                }
+            }
+        )
     }
 }
 

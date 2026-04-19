@@ -661,7 +661,7 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
                     IconButton(onClick = { isBannerDialogVisible = true }) {
                         Image(
                             painter = painterResource(id = R.mipmap.ic_launcher_foreground),
-                            contentDescription = "Show ChatGPT and Claude banner",
+                            contentDescription = "Feline Gardener app icon",
                             modifier = Modifier
                                 .size(36.dp)
                         )

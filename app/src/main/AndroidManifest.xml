@@ -30,7 +30,7 @@
         </provider>
         <receiver
             android:name=".UpdateReceiver"
-            android:exported="true">
+            android:exported="false">
             <intent-filter android:priority="999">
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>

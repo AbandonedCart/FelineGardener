@@ -1,5 +1,6 @@
 package com.felinegardener.toxicplants
 
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.ComponentName
 import android.content.Context
@@ -83,6 +84,7 @@ import java.net.URI
 import java.net.URL
 import java.util.Locale
 import kotlin.random.Random
+import androidx.core.net.toUri
 
 private const val ASPCA_CATS_LIST_URL = "https://www.aspca.org/pet-care/animal-poison-control/cats-plant-list"
 private const val ASPCA_PLANT_PATH_SEGMENT = "/toxic-and-non-toxic-plants/"
@@ -579,7 +581,7 @@ class MainActivity : ComponentActivity() {
         override fun onCustomTabsServiceConnected(name: ComponentName, client: CustomTabsClient) {
             customTabsClient = client.apply { warmup(0) }
             customTabsSession = client.newSession(null)?.also { session ->
-                session.mayLaunchUrl(Uri.parse(ASPCA_CATS_LIST_URL), null, null)
+                session.mayLaunchUrl(ASPCA_CATS_LIST_URL.toUri(), null, null)
             }
         }
 
@@ -701,7 +703,7 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
                             color = MaterialTheme.colorScheme.onTertiaryContainer
                         )
                         Text(
-                            text = "Tap to download the latest APK from GitHub Releases.",
+                            text = "Tap to download the latest APK from GitHub.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onTertiaryContainer
                         )
@@ -731,7 +733,7 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
                                                 Toast.LENGTH_LONG
                                             ).show()
                                             context.startActivity(
-                                                Intent(Intent.ACTION_VIEW, Uri.parse(release.htmlUrl))
+                                                Intent(Intent.ACTION_VIEW, release.htmlUrl.toUri())
                                             )
                                         }
                                     }
@@ -841,7 +843,7 @@ private suspend fun downloadAndInstallReleaseApk(activity: MainActivity, release
         activity.pendingInstallRelease = release
         activity.requestInstallLauncher.launch(
             Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
-                data = Uri.parse("package:${activity.packageName}")
+                data = "package:${activity.packageName}".toUri()
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
         )
@@ -886,6 +888,7 @@ private suspend fun downloadAndInstallReleaseApk(activity: MainActivity, release
     return if (installApkViaSession(activity, apkFile)) UpdateInstallResult.STARTED else UpdateInstallResult.FAILED
 }
 
+@SuppressLint("RequestInstallPackagesPolicy")
 private fun installApkViaSession(activity: MainActivity, apkFile: File): Boolean {
     return runCatching {
         val apkUri = FileProvider.getUriForFile(
@@ -961,7 +964,7 @@ private fun PlantRow(
                     .setInitialActivityHeightPx(initialHeight)
                     .setToolbarCornerRadiusDp(16)
                     .build()
-                    .launchUrl(context, Uri.parse(plant.detailsUrl))
+                    .launchUrl(context, plant.detailsUrl.toUri())
             },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(

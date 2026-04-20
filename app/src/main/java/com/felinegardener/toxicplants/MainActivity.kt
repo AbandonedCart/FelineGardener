@@ -46,6 +46,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -924,7 +925,7 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    Button(
+                    OutlinedButton(
                         onClick = {
                             val displayMetrics = context.resources.displayMetrics
                             val initialHeight = (displayMetrics.heightPixels * 0.6).toInt()

@@ -1,14 +1,12 @@
 package com.felinegardener.toxicplants
 
 import android.annotation.SuppressLint
-import android.content.Intent
-import android.content.ComponentName
-import android.content.Context
 import android.app.PendingIntent
+import android.content.ComponentName
+import android.content.Intent
 import android.content.pm.PackageInstaller
-import android.net.Uri
-import android.os.Bundle
 import android.os.Build
+import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -38,13 +36,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BasicAlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.BasicAlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -57,8 +55,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,6 +73,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
@@ -95,7 +94,6 @@ import java.net.URI
 import java.net.URL
 import java.util.Locale
 import kotlin.random.Random
-import androidx.core.net.toUri
 
 private const val ASPCA_BASE_URL = "https://www.aspca.org"
 private const val ASPCA_CATS_LIST_URL = "$ASPCA_BASE_URL/pet-care/animal-poison-control/cats-plant-list"
@@ -934,11 +932,11 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
                                 .setInitialActivityHeightPx(initialHeight)
                                 .setToolbarCornerRadiusDp(16)
                                 .build()
-                                .launchUrl(context, GITHUB_REPO_URL.toUri())
+                                .launchUrl(context, "https://www.aspca.org/about-us/linking-policy".toUri())
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(stringResource(R.string.banner_dialog_view_github))
+                        Text(stringResource(R.string.banner_dialog_link_policy))
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -951,11 +949,11 @@ fun ToxicPlantsScreen(viewModel: ToxicPlantsViewModel = viewModel()) {
                                 .setInitialActivityHeightPx(initialHeight)
                                 .setToolbarCornerRadiusDp(16)
                                 .build()
-                                .launchUrl(context, "https://www.aspca.org/about-us/linking-policy".toUri())
+                                .launchUrl(context, GITHUB_REPO_URL.toUri())
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(stringResource(R.string.banner_dialog_link_policy))
+                        Text(stringResource(R.string.banner_dialog_view_github))
                     }
                 }
             }

@@ -1,10 +1,20 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
 }
 
-val keystorePassword = System.getenv("KEYSTORE_PASSWORD")
-val signingKeyAlias = System.getenv("KEY_ALIAS")
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
+val keystorePassword = System.getenv("KEYSTORE_PASSWORD") ?: keystoreProperties.getProperty("keyPassword")
+val signingKeyAlias = System.getenv("KEY_ALIAS") ?: keystoreProperties.getProperty("keyAlias")
+
 val gitShortHash = System.getenv("GITHUB_SHA")?.take(7)
     ?: runCatching {
         providers.exec {
@@ -20,12 +30,12 @@ val requiresReleaseSigning = gradle.startParameter.taskNames.any { taskName ->
 
 if (requiresReleaseSigning) {
     val missingVariables = buildList {
-        if (keystorePassword.isNullOrBlank()) add("KEYSTORE_PASSWORD")
-        if (signingKeyAlias.isNullOrBlank()) add("KEY_ALIAS")
+        if (keystorePassword.isNullOrBlank()) add("KEYSTORE_PASSWORD (or 'keyPassword' in keystore.properties)")
+        if (signingKeyAlias.isNullOrBlank()) add("KEY_ALIAS (or 'keyAlias' in keystore.properties)")
     }
     if (missingVariables.isNotEmpty()) {
         throw GradleException(
-            "Missing required signing environment variable(s): ${missingVariables.joinToString(", ")}."
+            "Missing required signing configuration: ${missingVariables.joinToString(", ")}."
         )
     }
 }

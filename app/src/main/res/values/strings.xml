@@ -4,7 +4,7 @@
     <string name="banner_dialog_title">Feline Gardener</string>
     <string name="banner_dialog_git_hash">%1$s</string>
     <string name="banner_dialog_disclaimer">This app is not affiliated with or endorsed by the ASPCA. All content is provided for education purposes only.</string>
-    <string name="banner_dialog_image_description">ChatGPT and Claude banner</string>
+    <string name="banner_dialog_image_description">Trust in Claude</string>
     <string name="banner_dialog_view_github">View on GitHub</string>
     <string name="banner_dialog_link_policy">ASPCA Linking Policy</string>
     <string name="banner_dialog_close_icon_description">Close</string>
